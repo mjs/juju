@@ -297,5 +297,9 @@ func LocalID(st *State, id string) string {
 }
 
 func GetUnitEnvUUID(unit *Unit) string {
-	return unit.doc.EnvUUID
+	return unit.doc.ID.EnvUUID
+}
+
+func NewUnitDocID(st *State, unitName string) unitDocID {
+	return st.newUnitDocID(unitName)
 }

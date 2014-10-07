@@ -390,6 +390,14 @@ func (w *Watcher) sync() error {
 				continue
 			}
 			for i := len(d) - 1; i >= 0; i-- {
+				if _, ok := d[i].(bson.D); ok {
+					dm, err := bson.Marshal(d[i])
+					if err != nil {
+						return errors.Annotate(err, "unable to marshal key")
+					}
+					d[i] = string(dm)
+				}
+
 				key := watchKey{c.Name, d[i]}
 				if seen[key] {
 					continue

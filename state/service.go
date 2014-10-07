@@ -571,12 +571,8 @@ func (s *Service) addUnitOps(principalName string, asserts bson.D) (string, []tx
 	if err != nil {
 		return "", nil, err
 	}
-	docID := s.st.docID(name)
-	globalKey := unitGlobalKey(name)
 	udoc := &unitDoc{
-		DocID:     docID,
-		Name:      name,
-		EnvUUID:   s.doc.EnvUUID,
+		ID:        s.st.newUnitDocID(name),
 		Service:   s.doc.Name,
 		Series:    s.doc.Series,
 		Life:      Alive,
@@ -588,10 +584,11 @@ func (s *Service) addUnitOps(principalName string, asserts bson.D) (string, []tx
 	msdoc := meterStatusDoc{
 		Code: MeterNotSet,
 	}
+	globalKey := unitGlobalKey(name)
 	ops := []txn.Op{
 		{
 			C:      unitsC,
-			Id:     docID,
+			Id:     udoc.ID,
 			Assert: txn.DocMissing,
 			Insert: udoc,
 		},
@@ -606,7 +603,7 @@ func (s *Service) addUnitOps(principalName string, asserts bson.D) (string, []tx
 	if s.doc.Subordinate {
 		ops = append(ops, txn.Op{
 			C:  unitsC,
-			Id: s.st.docID(principalName),
+			Id: s.st.newUnitDocID(principalName),
 			Assert: append(isAliveDoc, bson.DocElem{
 				"subordinates", bson.D{{"$not", bson.RegEx{Pattern: "^" + s.doc.Name + "/"}}},
 			}),
@@ -676,7 +673,7 @@ func (s *Service) removeUnitOps(u *Unit, asserts bson.D) ([]txn.Op, error) {
 	}
 	ops = append(ops, txn.Op{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: append(observedFieldsMatch, asserts...),
 		Remove: true,
 	},
@@ -684,7 +681,7 @@ func (s *Service) removeUnitOps(u *Unit, asserts bson.D) ([]txn.Op, error) {
 		removeStatusOp(s.st, u.globalKey()),
 		removeMeterStatusOp(s.st, u.globalKey()),
 		annotationRemoveOp(s.st, u.globalKey()),
-		s.st.newCleanupOp(cleanupRemovedUnit, u.doc.Name),
+		s.st.newCleanupOp(cleanupRemovedUnit, u.doc.ID.Name),
 	)
 	ops = append(ops, portsOps...)
 	if u.doc.CharmURL != nil {

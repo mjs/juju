@@ -63,7 +63,7 @@ func (u *Unit) SetMeterStatus(codeRaw, info string) error {
 		return []txn.Op{
 			{
 				C:      unitsC,
-				Id:     u.doc.DocID,
+				Id:     u.doc.ID,
 				Assert: isAliveDoc,
 			}, {
 				C:      meterStatusC,

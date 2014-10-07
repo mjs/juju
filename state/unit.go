@@ -62,12 +62,16 @@ const (
 	ResolvedNoHooks    ResolvedMode = "no-hooks"
 )
 
+//
+type unitDocID struct {
+	EnvUUID string `bson:"env-uuid"`
+	Name    string `bson:"name"`
+}
+
 // unitDoc represents the internal state of a unit in MongoDB.
 // Note the correspondence with UnitInfo in apiserver/params.
 type unitDoc struct {
-	DocID        string `bson:"_id"`
-	Name         string `bson:"name"`
-	EnvUUID      string `bson:"env-uuid"`
+	ID           unitDocID `bson:"_id"`
 	Service      string
 	Series       string
 	CharmURL     *charm.URL
@@ -84,6 +88,13 @@ type unitDoc struct {
 	Ports          []network.Port
 	PublicAddress  string
 	PrivateAddress string
+}
+
+func (st *State) newUnitDocID(unitName string) unitDocID {
+	return unitDocID{
+		EnvUUID: st.EnvironTag().Id(),
+		Name:    unitName,
+	}
 }
 
 // Unit represents the state of a service unit.
@@ -147,12 +158,12 @@ func (u *Unit) Series() string {
 
 // String returns the unit as string.
 func (u *Unit) String() string {
-	return u.doc.Name
+	return u.doc.ID.Name
 }
 
 // Name returns the unit name.
 func (u *Unit) Name() string {
-	return u.doc.Name
+	return u.doc.ID.Name
 }
 
 // unitGlobalKey returns the global database key for the named unit.
@@ -162,7 +173,7 @@ func unitGlobalKey(name string) string {
 
 // globalKey returns the global database key for the unit.
 func (u *Unit) globalKey() string {
-	return unitGlobalKey(u.doc.Name)
+	return unitGlobalKey(u.doc.ID.Name)
 }
 
 // Life returns whether the unit is Alive, Dying or Dead.
@@ -191,7 +202,7 @@ func (u *Unit) SetAgentVersion(v version.Binary) (err error) {
 	tools := &tools.Tools{Version: v}
 	ops := []txn.Op{{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: notDeadDoc,
 		Update: bson.D{{"$set", bson.D{{"tools", tools}}}},
 	}}
@@ -216,7 +227,7 @@ func (u *Unit) SetPassword(password string) error {
 func (u *Unit) setPasswordHash(passwordHash string) error {
 	ops := []txn.Op{{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: notDeadDoc,
 		Update: bson.D{{"$set", bson.D{{"passwordhash", passwordHash}}}},
 	}}
@@ -326,10 +337,10 @@ func (u *Unit) destroyOps() ([]txn.Op, error) {
 	// the number of tests that have to change and defer that improvement to
 	// its own CL.
 	minUnitsOp := minUnitsTriggerOp(u.st, u.ServiceName())
-	cleanupOp := u.st.newCleanupOp(cleanupDyingUnit, u.doc.Name)
+	cleanupOp := u.st.newCleanupOp(cleanupDyingUnit, u.doc.ID.Name)
 	setDyingOps := []txn.Op{{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: isAliveDoc,
 		Update: bson.D{{"$set", bson.D{{"life", Dying}}}},
 	}, cleanupOp, minUnitsOp}
@@ -370,16 +381,16 @@ func (u *Unit) destroyHostOps(s *Service) (ops []txn.Op, err error) {
 	if s.doc.Subordinate {
 		return []txn.Op{{
 			C:      unitsC,
-			Id:     u.st.docID(u.doc.Principal),
+			Id:     u.st.newUnitDocID(u.doc.Principal),
 			Assert: txn.DocExists,
-			Update: bson.D{{"$pull", bson.D{{"subordinates", u.doc.Name}}}},
+			Update: bson.D{{"$pull", bson.D{{"subordinates", u.doc.ID.Name}}}},
 		}}, nil
 	} else if u.doc.MachineId == "" {
 		unitLogger.Errorf("unit %v unassigned", u)
 		return nil, nil
 	}
 
-	machineUpdate := bson.D{{"$pull", bson.D{{"principals", u.doc.Name}}}}
+	machineUpdate := bson.D{{"$pull", bson.D{{"principals", u.doc.ID.Name}}}}
 
 	m, err := u.st.Machine(u.doc.MachineId)
 	if err != nil {
@@ -413,7 +424,7 @@ func (u *Unit) destroyHostOps(s *Service) (ops []txn.Op, err error) {
 	}
 
 	machineCheck := true // whether host machine conditions allow destroy
-	if len(m.doc.Principals) != 1 || m.doc.Principals[0] != u.doc.Name {
+	if len(m.doc.Principals) != 1 || m.doc.Principals[0] != u.doc.ID.Name {
 		machineCheck = false
 	} else if hasJob(m.doc.Jobs, JobManageEnviron) {
 		// Check that the machine does not have any responsibilities that
@@ -428,13 +439,13 @@ func (u *Unit) destroyHostOps(s *Service) (ops []txn.Op, err error) {
 	var machineAssert bson.D
 	if machineCheck {
 		machineAssert = bson.D{{"$and", []bson.D{
-			bson.D{{"principals", []string{u.doc.Name}}},
+			bson.D{{"principals", []string{u.doc.ID.Name}}},
 			bson.D{{"jobs", bson.D{{"$nin", []MachineJob{JobManageEnviron}}}}},
 			bson.D{{"hasvote", bson.D{{"$ne", true}}}},
 		}}}
 	} else {
 		machineAssert = bson.D{{"$or", []bson.D{
-			bson.D{{"principals", bson.D{{"$ne", []string{u.doc.Name}}}}},
+			bson.D{{"principals", bson.D{{"$ne", []string{u.doc.ID.Name}}}}},
 			bson.D{{"jobs", bson.D{{"$in", []MachineJob{JobManageEnviron}}}}},
 			bson.D{{"hasvote", true}},
 		}}}
@@ -496,14 +507,14 @@ func (u *Unit) EnsureDead() (err error) {
 	}()
 	ops := []txn.Op{{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: append(notDeadDoc, unitHasNoSubordinates...),
 		Update: bson.D{{"$set", bson.D{{"life", Dead}}}},
 	}}
 	if err := u.st.runTransaction(ops); err != txn.ErrAborted {
 		return err
 	}
-	if notDead, err := isNotDead(u.st.db, unitsC, u.doc.DocID); err != nil {
+	if notDead, err := isNotDead(u.st.db, unitsC, u.doc.ID); err != nil {
 		return err
 	} else if !notDead {
 		return nil
@@ -683,7 +694,7 @@ func (u *Unit) Refresh() error {
 	units, closer := u.st.getCollection(unitsC)
 	defer closer()
 
-	err := units.FindId(u.doc.DocID).One(&u.doc)
+	err := units.FindId(u.doc.ID).One(&u.doc)
 	if err == mgo.ErrNotFound {
 		return errors.NotFoundf("unit %q", u)
 	}
@@ -718,7 +729,7 @@ func (u *Unit) SetStatus(status Status, info string, data map[string]interface{}
 	}
 	ops := []txn.Op{{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: notDeadDoc,
 	},
 		updateStatusOp(u.st, u.globalKey(), doc),
@@ -844,12 +855,12 @@ func (u *Unit) SetCharmURL(curl *charm.URL) (err error) {
 	charms := db.C(charmsC)
 
 	buildTxn := func(attempt int) ([]txn.Op, error) {
-		if notDead, err := isNotDead(u.st.db, unitsC, u.doc.DocID); err != nil {
+		if notDead, err := isNotDead(u.st.db, unitsC, u.doc.ID); err != nil {
 			return nil, err
 		} else if !notDead {
 			return nil, fmt.Errorf("unit %q is dead", u)
 		}
-		sel := bson.D{{"_id", u.doc.DocID}, {"charmurl", curl}}
+		sel := bson.D{{"_id", u.doc.ID}, {"charmurl", curl}}
 		if count, err := units.Find(sel).Count(); err != nil {
 			return nil, err
 		} else if count == 1 {
@@ -874,7 +885,7 @@ func (u *Unit) SetCharmURL(curl *charm.URL) (err error) {
 			incOp,
 			{
 				C:      unitsC,
-				Id:     u.doc.DocID,
+				Id:     u.doc.ID,
 				Assert: append(notDeadDoc, differentCharm...),
 				Update: bson.D{{"$set", bson.D{{"charmurl", curl}}}},
 			}}
@@ -969,7 +980,7 @@ func (u *Unit) AssignedMachineId() (id string, err error) {
 	defer closer()
 
 	pudoc := unitDoc{}
-	err = units.FindId(u.st.docID(u.doc.Principal)).One(&pudoc)
+	err = units.FindId(u.st.newUnitDocID(u.doc.Principal)).One(&pudoc)
 	if err == mgo.ErrNotFound {
 		return "", errors.NotFoundf("principal unit %q of %q", u.doc.Principal, u)
 	} else if err != nil {
@@ -1036,14 +1047,17 @@ func (u *Unit) assignToMachine(m *Machine, unused bool) (err error) {
 	}
 	ops := []txn.Op{{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: assert,
 		Update: bson.D{{"$set", bson.D{{"machineid", m.doc.Id}}}},
 	}, {
 		C:      machinesC,
 		Id:     m.doc.Id,
 		Assert: massert,
-		Update: bson.D{{"$addToSet", bson.D{{"principals", u.doc.Name}}}, {"$set", bson.D{{"clean", false}}}},
+		Update: bson.D{
+			{"$addToSet", bson.D{{"principals", u.doc.ID.Name}}},
+			{"$set", bson.D{{"clean", false}}},
+		},
 	}}
 	err = u.st.runTransaction(ops)
 	if err == nil {
@@ -1088,7 +1102,7 @@ func (u *Unit) AssignToMachine(m *Machine) (err error) {
 // assignToNewMachine assigns the unit to a machine created according to
 // the supplied params, with the supplied constraints.
 func (u *Unit) assignToNewMachine(template MachineTemplate, parentId string, containerType instance.ContainerType) error {
-	template.principals = []string{u.doc.Name}
+	template.principals = []string{u.doc.ID.Name}
 	template.Dirty = true
 
 	var (
@@ -1131,7 +1145,7 @@ func (u *Unit) assignToNewMachine(template MachineTemplate, parentId string, con
 	asserts := append(isAliveDoc, isUnassigned...)
 	ops = append(ops, txn.Op{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: asserts,
 		Update: bson.D{{"$set", bson.D{{"machineid", mdoc.Id}}}},
 	})
@@ -1514,7 +1528,7 @@ func (u *Unit) UnassignFromMachine() (err error) {
 	// machine id is as expected.
 	ops := []txn.Op{{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: txn.DocExists,
 		Update: bson.D{{"$set", bson.D{{"machineid", ""}}}},
 	}}
@@ -1523,7 +1537,7 @@ func (u *Unit) UnassignFromMachine() (err error) {
 			C:      machinesC,
 			Id:     u.doc.MachineId,
 			Assert: txn.DocExists,
-			Update: bson.D{{"$pull", bson.D{{"principals", u.doc.Name}}}},
+			Update: bson.D{{"$pull", bson.D{{"principals", u.doc.ID.Name}}}},
 		})
 	}
 	err = u.st.runTransaction(ops)
@@ -1543,7 +1557,7 @@ func (u *Unit) AddAction(name string, payload map[string]interface{}) (*Action, 
 	}
 	ops := []txn.Op{{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: notDeadDoc,
 	}, {
 		C:      actionsC,
@@ -1553,7 +1567,7 @@ func (u *Unit) AddAction(name string, payload map[string]interface{}) (*Action, 
 	}}
 
 	buildTxn := func(attempt int) ([]txn.Op, error) {
-		if notDead, err := isNotDead(u.st.db, unitsC, u.doc.DocID); err != nil {
+		if notDead, err := isNotDead(u.st.db, unitsC, u.doc.ID); err != nil {
 			return nil, err
 		} else if !notDead {
 			return nil, fmt.Errorf("unit %q is dead", u)
@@ -1612,7 +1626,7 @@ func (u *Unit) SetResolved(mode ResolvedMode) (err error) {
 	resolvedNotSet := bson.D{{"resolved", ResolvedNone}}
 	ops := []txn.Op{{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: append(notDeadDoc, resolvedNotSet...),
 		Update: bson.D{{"$set", bson.D{{"resolved", mode}}}},
 	}}
@@ -1622,7 +1636,7 @@ func (u *Unit) SetResolved(mode ResolvedMode) (err error) {
 	} else if err != txn.ErrAborted {
 		return err
 	}
-	if ok, err := isNotDead(u.st.db, unitsC, u.doc.DocID); err != nil {
+	if ok, err := isNotDead(u.st.db, unitsC, u.doc.ID); err != nil {
 		return err
 	} else if !ok {
 		return ErrDead
@@ -1635,7 +1649,7 @@ func (u *Unit) SetResolved(mode ResolvedMode) (err error) {
 func (u *Unit) ClearResolved() error {
 	ops := []txn.Op{{
 		C:      unitsC,
-		Id:     u.doc.DocID,
+		Id:     u.doc.ID,
 		Assert: txn.DocExists,
 		Update: bson.D{{"$set", bson.D{{"resolved", ResolvedNone}}}},
 	}}

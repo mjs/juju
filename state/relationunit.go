@@ -90,10 +90,10 @@ func (ru *RelationUnit) EnterScope(settings map[string]interface{}) error {
 	// * TODO(fwereade): check unit status == params.StatusStarted (this
 	//   breaks a bunch of tests in a boring but noisy-to-fix way, and is
 	//   being saved for a followup).
-	unitDocID, relationKey := ru.unit.doc.DocID, ru.relation.doc.Key
+	uDocID, relationKey := ru.unit.doc.ID, ru.relation.doc.Key
 	ops := []txn.Op{{
 		C:      unitsC,
-		Id:     unitDocID,
+		Id:     uDocID,
 		Assert: isAliveDoc,
 	}, {
 		C:      relationsC,
@@ -129,11 +129,11 @@ func (ru *RelationUnit) EnterScope(settings map[string]interface{}) error {
 	})
 
 	// * If the unit should have a subordinate, and does not, create it.
-	var existingSubId string
-	if subOps, subName, err := ru.subordinateOps(); err != nil {
+	var existingSubId *unitDocID
+	if subOps, subId, err := ru.subordinateOps(); err != nil {
 		return err
 	} else {
-		existingSubId = subName
+		existingSubId = subId
 		ops = append(ops, subOps...)
 	}
 
@@ -141,6 +141,7 @@ func (ru *RelationUnit) EnterScope(settings map[string]interface{}) error {
 	if err := ru.st.runTransaction(ops); err != txn.ErrAborted {
 		return err
 	}
+
 	if count, err := relationScopes.FindId(ruKey).Count(); err != nil {
 		return err
 	} else if count != 0 {
@@ -153,7 +154,7 @@ func (ru *RelationUnit) EnterScope(settings map[string]interface{}) error {
 	// unit: this could fail due to the subordinate service's not being Alive,
 	// but this case will always be caught by the check for the relation's
 	// life (because a relation cannot be Alive if its services are not).)
-	if alive, err := isAliveWithSession(db.C(unitsC), unitDocID); err != nil {
+	if alive, err := isAliveWithSession(db.C(unitsC), uDocID); err != nil {
 		return err
 	} else if !alive {
 		return ErrCannotEnterScope
@@ -166,8 +167,8 @@ func (ru *RelationUnit) EnterScope(settings map[string]interface{}) error {
 
 	// Maybe a subordinate used to exist, but is no longer alive. If that is
 	// case, we will be unable to enter scope until that unit is gone.
-	if existingSubId != "" {
-		if alive, err := isAliveWithSession(db.C(unitsC), existingSubId); err != nil {
+	if existingSubId != nil {
+		if alive, err := isAliveWithSession(db.C(unitsC), *existingSubId); err != nil {
 			return err
 		} else if !alive {
 			return ErrCannotEnterScopeYet
@@ -194,40 +195,41 @@ func (ru *RelationUnit) EnterScope(settings map[string]interface{}) error {
 // subordinate state when entering scope. If a required subordinate unit
 // exists and is Alive, its name will be returned as well; if one exists
 // but is not Alive, ErrCannotEnterScopeYet is returned.
-func (ru *RelationUnit) subordinateOps() ([]txn.Op, string, error) {
+func (ru *RelationUnit) subordinateOps() ([]txn.Op, *unitDocID, error) {
 	units, closer := ru.st.getCollection(unitsC)
 	defer closer()
 
 	if !ru.unit.IsPrincipal() || ru.endpoint.Scope != charm.ScopeContainer {
-		return nil, "", nil
+		return nil, nil, nil
 	}
 	related, err := ru.relation.RelatedEndpoints(ru.endpoint.ServiceName)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 	if len(related) != 1 {
-		return nil, "", fmt.Errorf("expected single related endpoint, got %v", related)
+		return nil, nil, fmt.Errorf("expected single related endpoint, got %v", related)
 	}
-	serviceName, unitName := related[0].ServiceName, ru.unit.doc.Name
+	serviceName, unitName := related[0].ServiceName, ru.unit.doc.ID.Name
 	selSubordinate := bson.D{{"service", serviceName}, {"principal", unitName}}
 	var lDoc lifeDoc
 	if err := units.Find(selSubordinate).One(&lDoc); err == mgo.ErrNotFound {
 		service, err := ru.st.Service(serviceName)
 		if err != nil {
-			return nil, "", err
+			return nil, nil, err
 		}
 		_, ops, err := service.addUnitOps(unitName, nil)
-		return ops, "", err
+		return ops, nil, err
 	} else if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	} else if lDoc.Life != Alive {
-		return nil, "", ErrCannotEnterScopeYet
+		return nil, nil, ErrCannotEnterScopeYet
 	}
+	docID := lDoc.Id.(unitDocID)
 	return []txn.Op{{
 		C:      unitsC,
-		Id:     lDoc.Id,
+		Id:     docID,
 		Assert: isAliveDoc,
-	}}, lDoc.Id.(string), nil
+	}}, &docID, nil
 }
 
 // PrepareLeaveScope causes the unit to be reported as departed by watchers,

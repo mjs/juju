@@ -611,16 +611,18 @@ func (st *State) parseTag(tag names.Tag) (string, interface{}, error) {
 		return "", nil, errors.Errorf("tag is nil")
 	}
 	coll := ""
-	id := tag.Id()
+	var id interface{}
+	tagID := tag.Id()
 	switch tag := tag.(type) {
 	case names.MachineTag:
 		coll = machinesC
+		id = tagID
 	case names.ServiceTag:
 		coll = servicesC
-		id = st.docID(id)
+		id = st.docID(tagID)
 	case names.UnitTag:
 		coll = unitsC
-		id = st.docID(id)
+		id = st.newUnitDocID(tagID)
 	case names.UserTag:
 		coll = usersC
 		if !tag.IsLocal() {
@@ -629,10 +631,13 @@ func (st *State) parseTag(tag names.Tag) (string, interface{}, error) {
 		id = tag.Name()
 	case names.RelationTag:
 		coll = relationsC
+		id = tagID
 	case names.EnvironTag:
 		coll = environmentsC
+		id = tagID
 	case names.NetworkTag:
 		coll = networksC
+		id = tagID
 	case names.ActionTag:
 		coll = actionsC
 		id = actionIdFromTag(tag)
@@ -1668,7 +1673,7 @@ func (st *State) Unit(name string) (*Unit, error) {
 	defer closer()
 
 	doc := unitDoc{}
-	err := units.FindId(st.docID(name)).One(&doc)
+	err := units.FindId(st.newUnitDocID(name)).One(&doc)
 	if err == mgo.ErrNotFound {
 		return nil, errors.NotFoundf("unit %q", name)
 	}

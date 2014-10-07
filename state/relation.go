@@ -280,7 +280,7 @@ func (r *Relation) Unit(u *Unit) (*RelationUnit, error) {
 	if ep.Scope == charm.ScopeContainer {
 		container := u.doc.Principal
 		if container == "" {
-			container = u.doc.Name
+			container = u.doc.ID.Name
 		}
 		scope = append(scope, container)
 	}

@@ -806,7 +806,7 @@ func (m *Machine) Units() (units []*Unit, err error) {
 	for _, pudoc := range pudocs {
 		units = append(units, newUnit(m.st, &pudoc))
 		docs := []unitDoc{}
-		err = unitsCollection.Find(bson.D{{"principal", pudoc.Name}}).All(&docs)
+		err = unitsCollection.Find(bson.D{{"principal", pudoc.ID.Name}}).All(&docs)
 		if err != nil {
 			return nil, err
 		}

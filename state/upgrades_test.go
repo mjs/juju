@@ -257,12 +257,12 @@ func (s *upgradesSuite) TestAddEnvUUIDToUnits(c *gc.C) {
 
 	var newDoc unitDoc
 	s.FindId(c, coll, newIDs[0], &newDoc)
-	c.Assert(newDoc.Name, gc.Equals, "mysql/0")
+	c.Assert(newDoc.ID.Name, gc.Equals, "mysql/0")
 	c.Assert(newDoc.Series, gc.Equals, "trusty")
 	c.Assert(newDoc.Life, gc.Equals, Alive)
 
 	s.FindId(c, coll, newIDs[1], &newDoc)
-	c.Assert(newDoc.Name, gc.Equals, "nounforge/0")
+	c.Assert(newDoc.ID.Name, gc.Equals, "nounforge/0")
 	c.Assert(newDoc.Series, gc.Equals, "utopic")
 	c.Assert(newDoc.Life, gc.Equals, Dead)
 }
@@ -430,7 +430,7 @@ func openLegacyPort(c *gc.C, unit *Unit, number int, proto string) {
 	port := network.Port{Protocol: proto, Number: number}
 	ops := []txn.Op{{
 		C:      unitsC,
-		Id:     unit.doc.DocID,
+		Id:     unit.doc.ID,
 		Assert: notDeadDoc,
 		Update: bson.D{{"$addToSet", bson.D{{"ports", port}}}},
 	}}
@@ -794,11 +794,9 @@ func (s *upgradesSuite) setUpMeterStatusCreation(c *gc.C) []*Unit {
 		for j := 0; j < 3; j++ {
 			name, err := svc.newUnitName()
 			c.Assert(err, gc.IsNil)
-			docID := s.state.docID(name)
+			docID := s.state.newUnitDocID(name)
 			udoc := &unitDoc{
-				DocID:     docID,
-				Name:      name,
-				EnvUUID:   svc.doc.EnvUUID,
+				ID:        docID,
 				Service:   svc.doc.Name,
 				Series:    svc.doc.Series,
 				Life:      Alive,

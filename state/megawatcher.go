@@ -86,7 +86,7 @@ type backingUnit unitDoc
 
 func (u *backingUnit) updated(st *State, store *multiwatcher.Store, id interface{}) error {
 	info := &params.UnitInfo{
-		Name:        u.Name,
+		Name:        u.ID.Name,
 		Service:     u.Service,
 		Series:      u.Series,
 		MachineId:   u.MachineId,
@@ -100,7 +100,7 @@ func (u *backingUnit) updated(st *State, store *multiwatcher.Store, id interface
 	if oldInfo == nil {
 		// We're adding the entry for the first time,
 		// so fetch the associated unit status.
-		sdoc, err := getStatus(st, unitGlobalKey(u.Name))
+		sdoc, err := getStatus(st, unitGlobalKey(u.ID.Name))
 		if err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func (u *backingUnit) updated(st *State, store *multiwatcher.Store, id interface
 		info.Status = oldInfo.Status
 		info.StatusInfo = oldInfo.StatusInfo
 	}
-	publicAddress, privateAddress, err := getUnitAddresses(st, u.Name)
+	publicAddress, privateAddress, err := getUnitAddresses(st, u.ID.Name)
 	if err != nil {
 		return err
 	}
@@ -143,7 +143,7 @@ func (svc *backingUnit) removed(st *State, store *multiwatcher.Store, id interfa
 }
 
 func (m *backingUnit) mongoId() interface{} {
-	return m.Name
+	return m.ID.Name
 }
 
 type backingService serviceDoc
@@ -584,13 +584,18 @@ func (b *allWatcherStateBacking) Changed(all *multiwatcher.Store, change watcher
 }
 
 // docID is a helper function which returns the environment ID for those
-// collections that have been migrated to include an environment UUID. For those collections that have not
-// been migrated, it returns the id that was passed in.
+// collections that have been migrated to include an environment
+// UUID. For those collections that have not been migrated, it returns
+// the id that was passed in.
 func (b *allWatcherStateBacking) docID(collection string, id interface{}) interface{} {
 	switch collection {
-	case servicesC, unitsC:
+	case servicesC:
 		if id, ok := id.(string); ok {
 			return b.st.docID(id)
+		}
+	case unitsC:
+		if unitName, ok := id.(string); ok {
+			return b.st.newUnitDocID(unitName)
 		}
 	}
 	return id

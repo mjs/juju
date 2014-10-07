@@ -167,7 +167,7 @@ func beginUnitMigrationOps(st *State, unit *Unit, machineId string) (
 		Assert: notDeadDoc,
 	}, {
 		C:      unitsC,
-		Id:     unit.doc.DocID,
+		Id:     unit.doc.ID,
 		Assert: notDeadDoc,
 	}}
 
@@ -295,7 +295,7 @@ func finishUnitMigrationOps(
 	// Delete any remainging ports on the unit.
 	ops = append(ops, txn.Op{
 		C:      unitsC,
-		Id:     unit.doc.DocID,
+		Id:     unit.doc.ID,
 		Assert: txn.DocExists,
 		Update: bson.D{{"$unset", bson.D{{"ports", nil}}}},
 	})

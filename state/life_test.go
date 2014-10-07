@@ -90,7 +90,7 @@ type unitLife struct {
 }
 
 func (l *unitLife) id() (coll string, id interface{}) {
-	return "units", state.DocID(l.st, l.unit.Name())
+	return "units", state.NewUnitDocID(l.st, l.unit.Name())
 }
 
 func (l *unitLife) setup(s *LifeSuite, c *gc.C) state.AgentLiving {
