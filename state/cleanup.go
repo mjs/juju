@@ -164,8 +164,8 @@ func (st *State) cleanupUnitsForDyingService(serviceName string) error {
 	// TODO(mjs) - ENVUUID - test env filtering needs to be tested
 	// when multiple environments exist.
 	sel := bson.D{
+		{"_id.env-uuid", st.EnvironTag().Id()},
 		{"service", serviceName},
-		{"env-uuid", st.EnvironTag().Id()},
 		{"life", Alive},
 	}
 	iter := units.Find(sel).Iter()

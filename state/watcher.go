@@ -178,12 +178,14 @@ func (s *Service) WatchUnits() StringsWatcher {
 	filter := func(docID interface{}) bool {
 		return strings.HasPrefix(docID.(unitDocID).Name, prefix)
 	}
+	//XXX
 	extractLocalID := func(id interface{}) string {
 		return s.st.localID(id.(string))
 	}
 	return newLifecycleWatcher(s.st, unitsC, extractLocalID, members, filter)
 }
 
+// XXX rename
 func toString(id interface{}) string {
 	return id.(string)
 }
@@ -856,31 +858,39 @@ var _ Watcher = (*unitsWatcher)(nil)
 // WatchSubordinateUnits returns a StringsWatcher tracking the unit's subordinate units.
 func (u *Unit) WatchSubordinateUnits() StringsWatcher {
 	u = &Unit{st: u.st, doc: u.doc}
-	coll := unitsC
 	getUnits := func() ([]string, error) {
 		if err := u.Refresh(); err != nil {
 			return nil, err
 		}
 		return u.doc.Subordinates, nil
 	}
-	return newUnitsWatcher(u.st, u.Tag(), getUnits, coll, u.doc.ID)
+	extractUnitName := func(id interface{}) string {
+		return id.(unitDocID).Name
+	}
+	return newUnitsWatcher(u.st, u.Tag(), getUnits, unitsC, extractUnitName, u.doc.ID)
 }
 
 // WatchPrincipalUnits returns a StringsWatcher tracking the machine's principal
 // units.
 func (m *Machine) WatchPrincipalUnits() StringsWatcher {
 	m = &Machine{st: m.st, doc: m.doc}
-	coll := machinesC
 	getUnits := func() ([]string, error) {
 		if err := m.Refresh(); err != nil {
 			return nil, err
 		}
 		return m.doc.Principals, nil
 	}
-	return newUnitsWatcher(m.st, m.Tag(), getUnits, coll, m.doc.Id)
+	return newUnitsWatcher(m.st, m.Tag(), getUnits, machinesC, toString, m.doc.Id)
 }
 
-func newUnitsWatcher(st *State, tag names.Tag, getUnits func() ([]string, error), coll string, id interface{}) StringsWatcher {
+func newUnitsWatcher(
+	st *State,
+	tag names.Tag,
+	getUnits func() ([]string, error),
+	coll string,
+	docIDToString func(interface{}) string,
+	id interface{},
+) StringsWatcher {
 	w := &unitsWatcher{
 		commonWatcher: commonWatcher{st: st},
 		tag:           tag.String(),
@@ -892,7 +902,7 @@ func newUnitsWatcher(st *State, tag names.Tag, getUnits func() ([]string, error)
 	go func() {
 		defer w.tomb.Done()
 		defer close(w.out)
-		w.tomb.Kill(w.loop(coll, id))
+		w.tomb.Kill(w.loop(coll, docIDToString, id))
 	}()
 	return w
 }
@@ -908,9 +918,9 @@ func (w *unitsWatcher) Changes() <-chan []string {
 }
 
 // lifeWatchDoc holds the fields used in starting and maintaining a watch
-// on a entity's lifecycle.
+// on a units's lifecycle.
 type lifeWatchDoc struct {
-	Id       string `bson:"_id"`
+	Id       unitDocID `bson:"_id"`
 	Life     Life
 	TxnRevno int64 `bson:"txn-revno"`
 }
@@ -926,19 +936,20 @@ func (w *unitsWatcher) initial() ([]string, error) {
 	}
 	newUnits, closer := w.st.getCollection(unitsC)
 	defer closer()
-	query := bson.D{
-		{"name", bson.D{{"$in", initialNames}}},
-		{"env-uuid", w.st.EnvironTag().Id()},
+	sel := bson.D{
+		{"_id.env-uuid", w.st.EnvironTag().Id()},
+		{"_id.name", bson.D{{"$in", initialNames}}},
 	}
 	docs := []lifeWatchDoc{}
-	if err := newUnits.Find(query).Select(lifeWatchFields).All(&docs); err != nil {
+	if err := newUnits.Find(sel).Select(lifeWatchFields).All(&docs); err != nil {
 		return nil, err
 	}
 	changes := []string{}
 	for _, doc := range docs {
-		changes = append(changes, w.st.localID(doc.Id))
+		name := doc.Id.Name
+		changes = append(changes, name)
 		if doc.Life != Dead {
-			w.life[w.st.localID(doc.Id)] = doc.Life
+			w.life[name] = doc.Life
 			w.st.watcher.Watch(unitsC, doc.Id, doc.TxnRevno, w.in)
 		}
 	}
@@ -1009,7 +1020,7 @@ func (w *unitsWatcher) merge(changes []string, name string) ([]string, error) {
 	return changes, nil
 }
 
-func (w *unitsWatcher) loop(coll string, id interface{}) error {
+func (w *unitsWatcher) loop(coll string, docIDToString func(interface{}) string, id interface{}) error {
 	collection, closer := mongo.CollectionFromName(w.st.db, coll)
 	revno, err := getTxnRevno(collection, id)
 	closer()
@@ -1036,10 +1047,10 @@ func (w *unitsWatcher) loop(coll string, id interface{}) error {
 		case <-w.tomb.Dying():
 			return tomb.ErrDying
 		case c := <-w.in:
-			if c.Id.(unitDocID) == id.(unitDocID) {
+			if docIDToString(c.Id) == docIDToString(id) {
 				changes, err = w.update(changes)
 			} else {
-				changes, err = w.merge(changes, id.(unitDocID).Name)
+				changes, err = w.merge(changes, docIDToString(id))
 			}
 			if err != nil {
 				return err

@@ -224,12 +224,13 @@ func (ru *RelationUnit) subordinateOps() ([]txn.Op, *unitDocID, error) {
 	} else if lDoc.Life != Alive {
 		return nil, nil, ErrCannotEnterScopeYet
 	}
-	docID := lDoc.Id.(unitDocID)
+	subName := lDoc.Id.(bson.M)["name"].(string)
+	subDocID := ru.st.newUnitDocID(subName)
 	return []txn.Op{{
 		C:      unitsC,
-		Id:     docID,
+		Id:     subDocID,
 		Assert: isAliveDoc,
-	}}, &docID, nil
+	}}, &subDocID, nil
 }
 
 // PrepareLeaveScope causes the unit to be reported as departed by watchers,
