@@ -44,8 +44,7 @@ func (s *debugLogSuite) TestWithHTTPS(c *gc.C) {
 }
 
 func (s *debugLogSuite) TestNoAuth(c *gc.C) {
-	conn, err := s.dialWebsocketInternal(c, nil, nil)
-	c.Assert(err, jc.ErrorIsNil)
+	conn := s.dialWebsocketInternal(c, nil, nil)
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 
@@ -59,8 +58,7 @@ func (s *debugLogSuite) TestAgentLoginsRejected(c *gc.C) {
 	})
 	header := utils.BasicAuthHeader(m.Tag().String(), password)
 	header.Add("X-Juju-Nonce", "foo-nonce")
-	conn, err := s.dialWebsocketInternal(c, nil, header)
-	c.Assert(err, jc.ErrorIsNil)
+	conn := s.dialWebsocketInternal(c, nil, header)
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 
@@ -297,8 +295,7 @@ func (s *debugLogSuite) TestFilter(c *gc.C) {
 		c.Assert(err, jc.ErrorIsNil)
 
 		// opens web socket
-		conn, err := s.dialWebsocket(c, test.filter)
-		c.Assert(err, jc.ErrorIsNil)
+		conn := s.dialWebsocket(c, test.filter)
 		reader := bufio.NewReader(conn)
 
 		s.assertLogFollowing(c, reader)
@@ -334,8 +331,7 @@ func (s *debugLogSuite) readLogLines(c *gc.C, reader *bufio.Reader, count int) (
 }
 
 func (s *debugLogSuite) openWebsocket(c *gc.C, values url.Values) *bufio.Reader {
-	conn, err := s.dialWebsocket(c, values)
-	c.Assert(err, jc.ErrorIsNil)
+	conn := s.dialWebsocket(c, values)
 	s.AddCleanup(func(_ *gc.C) { conn.Close() })
 	return bufio.NewReader(conn)
 }
@@ -344,8 +340,7 @@ func (s *debugLogSuite) openWebsocketCustomPath(c *gc.C, path string) *bufio.Rea
 	server := s.logURL(c, "wss", nil)
 	server.Path = path
 	header := utils.BasicAuthHeader(s.userTag.String(), s.password)
-	conn, err := s.dialWebsocketFromURL(c, server.String(), header)
-	c.Assert(err, jc.ErrorIsNil)
+	conn := s.dialWebsocketFromURL(c, server.String(), header)
 	s.AddCleanup(func(_ *gc.C) { conn.Close() })
 	return bufio.NewReader(conn)
 }
@@ -373,12 +368,12 @@ func (s *debugLogSuite) writeLogLines(c *gc.C, count int) {
 	}
 }
 
-func (s *debugLogSuite) dialWebsocketInternal(c *gc.C, queryParams url.Values, header http.Header) (*websocket.Conn, error) {
+func (s *debugLogSuite) dialWebsocketInternal(c *gc.C, queryParams url.Values, header http.Header) *websocket.Conn {
 	server := s.logURL(c, "wss", queryParams).String()
 	return s.dialWebsocketFromURL(c, server, header)
 }
 
-func (s *debugLogSuite) dialWebsocket(c *gc.C, queryParams url.Values) (*websocket.Conn, error) {
+func (s *debugLogSuite) dialWebsocket(c *gc.C, queryParams url.Values) *websocket.Conn {
 	header := utils.BasicAuthHeader(s.userTag.String(), s.password)
 	return s.dialWebsocketInternal(c, queryParams, header)
 }
