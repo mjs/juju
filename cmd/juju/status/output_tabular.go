@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -102,6 +103,8 @@ func FormatTabular(value interface{}) ([]byte, error) {
 	const ellipsis = "..."
 	const truncatedWidth = maxVersionWidth - len(ellipsis)
 
+	mmTrial := os.Getenv("TRIAL")
+
 	fs, valueConverted := value.(formattedStatus)
 	if !valueConverted {
 		return nil, errors.Errorf("expected value of type %T, got %T", fs, value)
@@ -120,15 +123,47 @@ func FormatTabular(value interface{}) ([]byte, error) {
 		cloudRegion += "/" + fs.Model.CloudRegion
 	}
 
-	header := []interface{}{"MODEL", "CONTROLLER", "CLOUD/REGION", "VERSION"}
-	values := []interface{}{fs.Model.Name, fs.Model.Controller, cloudRegion, fs.Model.Version}
-	if fs.Model.AvailableVersion != "" {
-		header = append(header, "UPGRADE-AVAILABLE")
-		values = append(values, fs.Model.AvailableVersion)
+	if mmTrial == "5" {
+		p("MODEL", fs.Model.Name)
+		p("CONTROLLER", fs.Model.Controller)
+		p("CLOUD/REGION", cloudRegion)
+		p("VERSION", fs.Model.Version)
+		if fs.Model.AvailableVersion != "" {
+			p("UPGRADE-AVAILABLE", fs.Model.AvailableVersion)
+		}
+		if fs.Model.Migration != "" {
+			p("MIGRATION", fs.Model.Migration)
+		}
+	} else {
+		header := []interface{}{"MODEL", "CONTROLLER", "CLOUD/REGION", "VERSION"}
+		values := []interface{}{fs.Model.Name, fs.Model.Controller, cloudRegion, fs.Model.Version}
+
+		if fs.Model.Migration != "" {
+			switch mmTrial {
+			case "1":
+				header = append(header, "MIGRATION")
+				values = append(values, fs.Model.Migration)
+			case "2":
+				header = append(header, "MESSAGES")
+				values = append(values, "migrating: "+fs.Model.Migration)
+			case "3":
+				header = append(header, "STATUS")
+				values = append(values, "migrating")
+			}
+		} else if fs.Model.AvailableVersion != "" {
+			header = append(header, "UPGRADE-AVAILABLE")
+			values = append(values, fs.Model.AvailableVersion)
+		}
+
+		// The first set of headers don't use outputHeaders because it adds the blank line.
+		p(header...)
+		p(values...)
 	}
-	// The first set of headers don't use outputHeaders because it adds the blank line.
-	p(header...)
-	p(values...)
+
+	if mmTrial == "4" && fs.Model.Migration != "" {
+		outputHeaders("MIGRATION")
+		p(fs.Model.Migration)
+	}
 
 	units := make(map[string]unitStatus)
 	metering := false
