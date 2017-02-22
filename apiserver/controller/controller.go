@@ -31,22 +31,6 @@ import (
 
 var logger = loggo.GetLogger("juju.apiserver.controller")
 
-// Controller defines the methods on the controller API end point.
-type Controller interface {
-	AllModels() (params.UserModelList, error)
-	DestroyController(args params.DestroyControllerArgs) error
-	ModelConfig() (params.ModelConfigResults, error)
-	HostedModelConfigs() (params.HostedModelConfigsResults, error)
-	GetControllerAccess(params.Entities) (params.UserAccessResults, error)
-	ControllerConfig() (params.ControllerConfigResult, error)
-	ListBlockedModels() (params.ModelBlockInfoList, error)
-	RemoveBlocks(args params.RemoveBlocksArgs) error
-	WatchAllModels() (params.AllWatcherId, error)
-	ModelStatus(params.Entities) (params.ModelStatusResults, error)
-	InitiateMigration(params.InitiateMigrationArgs) (params.InitiateMigrationResults, error)
-	ModifyControllerAccess(params.ModifyControllerAccessRequest) (params.ErrorResults, error)
-}
-
 // ControllerAPI implements the environment manager interface and is
 // the concrete implementation of the api end point.
 type ControllerAPI struct {
@@ -60,8 +44,6 @@ type ControllerAPI struct {
 	apiUser    names.UserTag
 	resources  facade.Resources
 }
-
-var _ Controller = (*ControllerAPI)(nil)
 
 // NewControllerAPI creates a new api server endpoint for managing
 // environments.

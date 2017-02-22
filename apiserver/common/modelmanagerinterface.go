@@ -31,6 +31,7 @@ type ModelManagerBackend interface {
 	ModelsForUser(names.UserTag) ([]*state.UserModel, error)
 	IsControllerAdmin(user names.UserTag) (bool, error)
 	NewModel(state.ModelArgs) (Model, ModelManagerBackend, error)
+	NewCAASModel(state.CAASModelArgs) (CAASModel, CAASModelBackend, error)
 
 	ComposeNewModelConfig(modelAttr map[string]interface{}, regionSpec *environs.RegionSpec) (map[string]interface{}, error)
 	ControllerModel() (Model, error)
@@ -69,6 +70,11 @@ type ModelManagerBackend interface {
 	CleanupOldMetrics() error
 }
 
+// XXX
+type CAASModelBackend interface {
+	Close() error
+}
+
 // Model defines methods provided by a state.Model instance.
 // All the interface methods are defined directly on state.Model
 // and are reproduced here for use in tests.
@@ -84,6 +90,9 @@ type Model interface {
 	Users() ([]permission.UserAccess, error)
 	Destroy() error
 	DestroyIncludingHosted() error
+}
+
+type CAASModel interface {
 }
 
 var _ ModelManagerBackend = (*modelManagerStateShim)(nil)
@@ -114,6 +123,15 @@ func (st modelManagerStateShim) NewModel(args state.ModelArgs) (Model, ModelMana
 		return nil, nil, err
 	}
 	return modelShim{m}, modelManagerStateShim{otherState}, nil
+}
+
+// NewCAASModel implements ModelManagerBackend.
+func (st modelManagerStateShim) NewCAASModel(args state.CAASModelArgs) (CAASModel, CAASModelBackend, error) {
+	m, otherState, err := st.State.NewCAASModel(args)
+	if err != nil {
+		return nil, nil, err
+	}
+	return m, otherState, nil
 }
 
 // ForModel implements ModelManagerBackend.
