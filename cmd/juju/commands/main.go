@@ -413,6 +413,7 @@ func registerCommands(r commandRegistry, ctx *cmd.Context) {
 
 	// Manage controllers
 	r.Register(controller.NewAddModelCommand())
+	r.Register(controller.NewAddCAASModelCommand())
 	r.Register(controller.NewDestroyCommand())
 	r.Register(controller.NewListModelsCommand())
 	r.Register(controller.NewKillCommand())
