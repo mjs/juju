@@ -110,6 +110,10 @@ func allCollections() collectionSchema {
 		// Life and its UUID.
 		modelsC: {global: true},
 
+		// This collection holds information for CAAS models; in
+		// particular its Life and its UUID.
+		caasModelsC: {global: true},
+
 		// This collection holds references to entities owned by a
 		// model. We use this to determine whether or not we can safely
 		// destroy empty models.
@@ -452,6 +456,7 @@ const (
 	bakeryStorageItemsC      = "bakeryStorageItems"
 	blockDevicesC            = "blockdevices"
 	blocksC                  = "blocks"
+	caasModelsC              = "caasModels"
 	charmsC                  = "charms"
 	cleanupsC                = "cleanups"
 	cloudimagemetadataC      = "cloudimagemetadata"
