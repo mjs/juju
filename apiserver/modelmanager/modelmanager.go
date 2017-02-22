@@ -36,15 +36,6 @@ import (
 
 var logger = loggo.GetLogger("juju.apiserver.modelmanager")
 
-// ModelManager defines the methods on the modelmanager API endpoint.
-type ModelManager interface {
-	CreateModel(args params.ModelCreateArgs) (params.ModelInfo, error)
-	DumpModels(args params.Entities) params.MapResults
-	DumpModelsDB(args params.Entities) params.MapResults
-	ListModels(user params.Entity) (params.UserModelList, error)
-	DestroyModels(args params.Entities) (params.ErrorResults, error)
-}
-
 // ModelManagerAPI implements the model manager interface and is
 // the concrete implementation of the api end point.
 type ModelManagerAPI struct {
@@ -56,8 +47,6 @@ type ModelManagerAPI struct {
 	apiUser     names.UserTag
 	isAdmin     bool
 }
-
-var _ ModelManager = (*ModelManagerAPI)(nil)
 
 // NewFacade is used for API registration.
 func NewFacade(st *state.State, _ facade.Resources, auth facade.Authorizer) (*ModelManagerAPI, error) {
@@ -335,6 +324,59 @@ func (m *ModelManagerAPI) CreateModel(args params.ModelCreateArgs) (params.Model
 	}
 
 	return m.getModelInfo(model.ModelTag())
+}
+
+// CreateCAASModel creates a new CAAS model.
+func (m *ModelManagerAPI) CreateCAASModel(args params.CAASModelCreateArgs) (params.CAASModelInfo, error) {
+	// XXX validate args here
+
+	result := params.CAASModelInfo{}
+	canAddModel, err := m.authorizer.HasPermission(permission.AddModelAccess, m.state.ControllerTag())
+	if err != nil {
+		return result, errors.Trace(err)
+	}
+	if !canAddModel {
+		return result, common.ErrPerm
+	}
+
+	ownerTag, err := names.ParseUserTag(args.OwnerTag)
+	if err != nil {
+		return result, errors.Trace(err)
+	}
+
+	// a special case of ErrPerm will happen if the user has add-model permission but is trying to
+	// create a model for another person, which is not yet supported.
+	if !m.isAdmin && ownerTag != m.apiUser {
+		return result, errors.Annotatef(common.ErrPerm, "%q permission does not permit creation of models for different owners", permission.AddModelAccess)
+	}
+
+	modelUUID, err := utils.NewUUID()
+	if err != nil {
+		return result, errors.Trace(err)
+	}
+
+	_, st, err := m.state.NewCAASModel(state.CAASModelArgs{
+		UUID:     modelUUID.String(),
+		Name:     args.Name,
+		Owner:    ownerTag,
+		Endpoint: args.Endpoint,
+		CertData: args.CertData,
+		KeyData:  args.KeyData,
+		CAData:   args.CAData,
+	})
+	if err != nil {
+		return result, errors.Annotate(err, "failed to create new model")
+	}
+	defer st.Close()
+
+	return params.CAASModelInfo{
+		Name:           args.Name,
+		UUID:           modelUUID.String(),
+		ControllerUUID: m.state.ControllerUUID(),
+		// XXX type
+		OwnerTag: args.OwnerTag,
+		Life:     params.Alive,
+	}, nil
 }
 
 func (m *ModelManagerAPI) dumpModel(args params.Entity) (map[string]interface{}, error) {
