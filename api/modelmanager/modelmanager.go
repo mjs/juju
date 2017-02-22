@@ -375,3 +375,27 @@ func (c *Client) UnsetModelDefaults(cloud, region string, keys ...string) error 
 	}
 	return result.OneError()
 }
+
+// CreateCAASModel creates a new CAAS model.
+func (c *Client) CreateCAASModel(
+	name, owner, endpoint, certData, keyData, caData string,
+) (string, error) {
+	if !names.IsValidUser(owner) {
+		return "", errors.Errorf("invalid owner name %q", owner)
+	}
+
+	createArgs := params.CAASModelCreateArgs{
+		Name:     name,
+		OwnerTag: names.NewUserTag(owner).String(),
+		Endpoint: endpoint,
+		CertData: []byte(certData),
+		KeyData:  []byte(keyData),
+		CAData:   []byte(caData),
+	}
+	var modelInfo params.CAASModelInfo
+	err := c.facade.FacadeCall("CreateCAASModel", createArgs, &modelInfo)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return modelInfo.UUID, nil
+}
