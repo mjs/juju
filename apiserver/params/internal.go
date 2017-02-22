@@ -130,6 +130,17 @@ type ModelCreateArgs struct {
 	CloudCredentialTag string `json:"credential,omitempty"`
 }
 
+// CAASModelCreateArgs holds the arguments that are necessary to
+// create a CAAS model.
+type CAASModelCreateArgs struct {
+	Name     string `json:"name"`
+	OwnerTag string `json:"owner-tag"`
+	Endpoint string `json:"endpoint"`
+	CertData []byte `json:"cert-data"`
+	KeyData  []byte `json:"key-data"`
+	CAData   []byte `json:"ca-data"`
+}
+
 // Model holds the result of an API call returning a name and UUID
 // for a model and the tag of the server in which it is running.
 type Model struct {

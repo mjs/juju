@@ -437,6 +437,12 @@ func (st *mockState) NewModel(args state.ModelArgs) (common.Model, common.ModelM
 	return st.model, st, st.NextErr()
 }
 
+func (st *mockState) NewCAASModel(args state.CAASModelArgs) (common.CAASModel, common.CAASModelBackend, error) {
+	st.MethodCall(st, "NewCAASModel", args)
+	// XXX
+	return nil, nil, nil
+}
+
 func (st *mockState) ControllerModel() (common.Model, error) {
 	st.MethodCall(st, "ControllerModel")
 	return st.controllerModel, st.NextErr()
