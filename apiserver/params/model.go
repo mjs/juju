@@ -258,3 +258,17 @@ const (
 	ModelReadAccess  UserAccessPermission = "read"
 	ModelWriteAccess UserAccessPermission = "write"
 )
+
+// CAASModelInfo holds information about a Juju CAAS model.
+type CAASModelInfo struct {
+	Name           string `json:"name"`
+	UUID           string `json:"uuid"`
+	ControllerUUID string `json:"controller-uuid"`
+	// XXX type
+
+	// OwnerTag is the tag of the user that owns the model.
+	OwnerTag string `json:"owner-tag"`
+
+	// Life is the current lifecycle state of the model.
+	Life Life `json:"life"`
+}
