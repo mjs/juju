@@ -62,10 +62,18 @@ type ControllerDetails struct {
 	MachineCount *int `yaml:"machine-count,omitempty"`
 }
 
+type ModelType string
+
+const IAASModel ModelType = "iaas"
+const CAASModel ModelType = "caas"
+
 // ModelDetails holds details of a model.
 type ModelDetails struct {
 	// ModelUUID is the unique ID for the model.
 	ModelUUID string `yaml:"uuid"`
+
+	// XXX
+	Type ModelType `yaml:"type"`
 }
 
 // AccountDetails holds details of an account.

@@ -124,7 +124,8 @@ func (c *addCAASModelCommand) Run(ctx *cmd.Context) error {
 	}
 
 	if err := store.UpdateModel(controllerName, c.Name, jujuclient.ModelDetails{
-		modelUUID,
+		ModelUUID: modelUUID,
+		Type:      jujuclient.CAASModel,
 	}); err != nil {
 		return errors.Trace(err)
 	}
