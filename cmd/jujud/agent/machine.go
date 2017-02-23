@@ -80,6 +80,7 @@ import (
 	"github.com/juju/juju/watcher"
 	jworker "github.com/juju/juju/worker"
 	"github.com/juju/juju/worker/apicaller"
+	"github.com/juju/juju/worker/caasmodelworkermanager"
 	"github.com/juju/juju/worker/certupdater"
 	"github.com/juju/juju/worker/conv2state"
 	"github.com/juju/juju/worker/dblogpruner"
@@ -1014,6 +1015,19 @@ func (a *MachineAgent) startStateWorkers(
 				}
 				return w, nil
 			})
+			a.startWorkerAfterUpgrade(runner, "CAAS model worker manager", func() (worker.Worker, error) {
+				w, err := caasmodelworkermanager.New(caasmodelworkermanager.Config{
+					ControllerUUID: st.ControllerUUID(),
+					Backend:        st,
+					NewWorker:      a.startCAASModelWorkers,
+					ErrorDelay:     worker.RestartDelay,
+				})
+				if err != nil {
+					return nil, errors.Annotate(err, "cannot start CAAS model worker manager")
+				}
+				return w, nil
+			})
+
 			a.startWorkerAfterUpgrade(runner, "peergrouper", func() (worker.Worker, error) {
 				env, err := stateenvirons.GetNewEnvironFunc(environs.New)(st)
 				if err != nil {
@@ -1138,6 +1152,28 @@ func (a *MachineAgent) startModelWorkers(controllerUUID, modelUUID string) (work
 		return nil, errors.Trace(err)
 	}
 	return engine, nil
+}
+
+func (a *MachineAgent) startCAASModelWorkers(controllerUUID, modelUUID string) (worker.Worker, error) {
+	logger.Infof("starting CAAS workers for %s", modelUUID)
+	// XXX need a dependency engine here and a lifeflag to tear things
+	// down when the model goes away
+
+	// XXX this needs to start something useful
+	return new(dummyWorker), nil
+}
+
+// XXX
+type dummyWorker struct {
+	tomb tomb.Tomb
+}
+
+func (dw *dummyWorker) Kill() {
+	dw.tomb.Kill(nil)
+}
+
+func (dw *dummyWorker) Wait() error {
+	return dw.tomb.Wait()
 }
 
 // stateWorkerDialOpts is a mongo.DialOpts suitable
