@@ -209,6 +209,14 @@ func (st *State) WatchModels() StringsWatcher {
 	})
 }
 
+// XXX
+func (st *State) WatchCAASModels() StringsWatcher {
+	return newcollectionWatcher(st, colWCfg{
+		col:    caasModelsC,
+		global: true,
+	})
+}
+
 // WatchModelLives returns a StringsWatcher that notifies of changes
 // to any model life values. The most important difference between
 // this and WatchModels is that this will signal one last time if a
