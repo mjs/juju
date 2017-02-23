@@ -163,7 +163,10 @@ func (c *registerCommand) run(ctx *cmd.Context) error {
 		if err := c.store.UpdateModel(
 			controllerName,
 			jujuclient.JoinOwnerModelName(owner, model.Name),
-			jujuclient.ModelDetails{model.UUID},
+			jujuclient.ModelDetails{
+				ModelUUID: model.UUID,
+				Type:      jujuclient.IAASModel,
+			},
 		); err != nil {
 			return errors.Annotate(err, "storing model details")
 		}

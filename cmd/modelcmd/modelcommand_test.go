@@ -98,13 +98,13 @@ func (s *ModelCommandSuite) TestModelName(c *gc.C) {
 	s.store.Accounts["foo"] = jujuclient.AccountDetails{
 		User: "bar", Password: "hunter2",
 	}
-	err := s.store.UpdateModel("foo", "adminfoo/currentfoo", jujuclient.ModelDetails{"uuidfoo1"})
+	err := s.store.UpdateModel("foo", "adminfoo/currentfoo", jujuclient.ModelDetails{ModelUUID: "uuidfoo1"})
 	c.Assert(err, jc.ErrorIsNil)
-	err = s.store.UpdateModel("foo", "adminfoo/oncurrentfoo", jujuclient.ModelDetails{"uuidfoo2"})
+	err = s.store.UpdateModel("foo", "adminfoo/oncurrentfoo", jujuclient.ModelDetails{ModelUUID: "uuidfoo2"})
 	c.Assert(err, jc.ErrorIsNil)
-	err = s.store.UpdateModel("bar", "adminbar/currentbar", jujuclient.ModelDetails{"uuidbar1"})
+	err = s.store.UpdateModel("bar", "adminbar/currentbar", jujuclient.ModelDetails{ModelUUID: "uuidbar1"})
 	c.Assert(err, jc.ErrorIsNil)
-	err = s.store.UpdateModel("bar", "adminbar/noncurrentbar", jujuclient.ModelDetails{"uuidbar2"})
+	err = s.store.UpdateModel("bar", "adminbar/noncurrentbar", jujuclient.ModelDetails{ModelUUID: "uuidbar2"})
 	c.Assert(err, jc.ErrorIsNil)
 	err = s.store.SetCurrentModel("foo", "adminfoo/currentfoo")
 	c.Assert(err, jc.ErrorIsNil)
@@ -237,7 +237,7 @@ func (s *macaroonLoginSuite) SetUpTest(c *gc.C) {
 	}
 	s.store.Models[s.controllerName] = &jujuclient.ControllerModels{
 		Models: map[string]jujuclient.ModelDetails{
-			s.modelName: {modelTag.Id()},
+			s.modelName: {ModelUUID: modelTag.Id()},
 		},
 	}
 }
