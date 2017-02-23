@@ -108,7 +108,20 @@ func ParseModels(data []byte) (map[string]*ControllerModels, error) {
 	if err != nil {
 		return nil, errors.Annotate(err, "cannot unmarshal models")
 	}
+	setModelTypeIfMissing(result)
 	return result.ControllerModels, nil
+}
+
+func setModelTypeIfMissing(all modelsCollection) {
+	for _, controllerModel := range all.ControllerModels {
+		models := controllerModel.Models
+		for name, model := range models {
+			if model.Type == "" {
+				model.Type = IAASModel
+				models[name] = model
+			}
+		}
+	}
 }
 
 type modelsCollection struct {
