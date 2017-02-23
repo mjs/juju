@@ -55,7 +55,9 @@ func (s *ModelCommandSuite) TestGetCurrentModelCurrentControllerNoCurrentModel(c
 }
 
 func (s *ModelCommandSuite) TestGetCurrentModelCurrentControllerModel(c *gc.C) {
-	err := s.store.UpdateModel("foo", "admin/mymodel", jujuclient.ModelDetails{"uuid"})
+	err := s.store.UpdateModel("foo", "admin/mymodel", jujuclient.ModelDetails{
+		ModelUUID: "uuid",
+	})
 	c.Assert(err, jc.ErrorIsNil)
 	err = s.store.SetCurrentModel("foo", "admin/mymodel")
 	c.Assert(err, jc.ErrorIsNil)
@@ -75,7 +77,9 @@ func (s *ModelCommandSuite) TestGetCurrentModelJujuEnvSet(c *gc.C) {
 func (s *ModelCommandSuite) TestGetCurrentModelBothSet(c *gc.C) {
 	os.Setenv(osenv.JujuModelEnvKey, "admin/magic")
 
-	err := s.store.UpdateModel("foo", "admin/mymodel", jujuclient.ModelDetails{"uuid"})
+	err := s.store.UpdateModel("foo", "admin/mymodel", jujuclient.ModelDetails{
+		ModelUUID: "uuid",
+	})
 	c.Assert(err, jc.ErrorIsNil)
 	err = s.store.SetCurrentModel("foo", "admin/mymodel")
 	c.Assert(err, jc.ErrorIsNil)
@@ -96,7 +100,9 @@ func (s *ModelCommandSuite) TestModelCommandInitExplicitLongForm(c *gc.C) {
 }
 
 func (s *ModelCommandSuite) TestModelCommandInitEnvFile(c *gc.C) {
-	err := s.store.UpdateModel("foo", "admin/mymodel", jujuclient.ModelDetails{"uuid"})
+	err := s.store.UpdateModel("foo", "admin/mymodel", jujuclient.ModelDetails{
+		ModelUUID: "uuid",
+	})
 	c.Assert(err, jc.ErrorIsNil)
 	err = s.store.SetCurrentModel("foo", "admin/mymodel")
 	c.Assert(err, jc.ErrorIsNil)
@@ -209,7 +215,7 @@ func (s *macaroonLoginSuite) SetUpTest(c *gc.C) {
 	}
 	s.store.Models[s.controllerName] = &jujuclient.ControllerModels{
 		Models: map[string]jujuclient.ModelDetails{
-			s.modelName: {modelTag.Id()},
+			s.modelName: {ModelUUID: modelTag.Id()},
 		},
 	}
 }
