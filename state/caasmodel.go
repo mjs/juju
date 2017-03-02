@@ -46,22 +46,22 @@ type CAASModelArgs struct {
 }
 
 func (st *State) NewCAASModel(args CAASModelArgs) (*CAASModel, *CAASState, error) {
-	newSt, err := newCAASState(st, names.NewModelTag(args.UUID), st.clock)
+	caasSt, err := newCAASState(st, names.NewModelTag(args.UUID), st.clock)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "could not create state for new caas model")
 	}
 	defer func() {
 		if err != nil {
-			newSt.Close()
+			caasSt.Close()
 		}
 	}()
 
-	modelOps, err := newSt.modelSetupOps(args.UUID, st.controllerTag.Id(), args)
+	modelOps, err := caasSt.modelSetupOps(args.UUID, st.controllerTag.Id(), args)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "failed to create new caas model")
 	}
 
-	err = newSt.runTransaction(modelOps)
+	err = caasSt.db().RunTransaction(modelOps)
 	if err == txn.ErrAborted {
 		// XXX extract
 		// We have a  unique key restriction on the "owner" and "name" fields,
@@ -69,7 +69,7 @@ func (st *State) NewCAASModel(args CAASModelArgs) (*CAASModel, *CAASState, error
 		// the same "owner" and "name" in the collection. If the txn is
 		// aborted, check if it is due to the unique key restriction.
 		name := args.Name
-		models, closer := st.getCollection(caasModelsC)
+		models, closer := st.db().GetCollection(caasModelsC)
 		defer closer()
 		envCount, countErr := models.Find(bson.D{
 			{"owner", args.Owner.Id()},
@@ -87,15 +87,15 @@ func (st *State) NewCAASModel(args CAASModelArgs) (*CAASModel, *CAASState, error
 		return nil, nil, errors.Trace(err)
 	}
 
-	err = newSt.start()
+	err = caasSt.start()
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "could not start state for new caas model")
 	}
 
-	newModel, err := newSt.Model()
+	caasModel, err := caasSt.Model()
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 
-	return newModel, newSt, nil
+	return caasModel, caasSt, nil
 }
