@@ -211,7 +211,7 @@ func (st *State) WatchModels() StringsWatcher {
 
 // XXX
 func (st *State) WatchCAASModels() StringsWatcher {
-	return newcollectionWatcher(st, colWCfg{
+	return newCollectionWatcher(st, colWCfg{
 		col:    caasModelsC,
 		global: true,
 	})

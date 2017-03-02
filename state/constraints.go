@@ -80,7 +80,7 @@ func setConstraintsOp(st *State, id string, cons constraints.Value) txn.Op {
 	}
 }
 
-func removeConstraintsOp(st *State, id string) txn.Op {
+func removeConstraintsOp(id string) txn.Op {
 	return txn.Op{
 		C:      constraintsC,
 		Id:     id,

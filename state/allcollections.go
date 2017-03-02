@@ -250,8 +250,9 @@ func allCollections() collectionSchema {
 		// -----
 
 		// These collections hold information associated with applications.
-		charmsC:       {},
-		applicationsC: {},
+		charmsC:           {},
+		applicationsC:     {},
+		caasApplicationsC: {},
 		unitsC: {
 			indexes: []mgo.Index{{
 				Key: []string{"model-uuid", "application"},
@@ -497,6 +498,7 @@ const (
 	restoreInfoC             = "restoreInfo"
 	sequenceC                = "sequence"
 	applicationsC            = "applications"
+	caasApplicationsC        = "caasapplications"
 	endpointBindingsC        = "endpointbindings"
 	settingsC                = "settings"
 	refcountsC               = "refcounts"

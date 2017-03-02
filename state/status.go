@@ -155,10 +155,10 @@ func createStatusOp(st *State, globalKey string, doc statusDoc) txn.Op {
 
 // removeStatusOp returns the operation needed to remove the status
 // document associated with the given globalKey.
-func removeStatusOp(st *State, globalKey string) txn.Op {
+func removeStatusOp(backend modelBackend, globalKey string) txn.Op {
 	return txn.Op{
 		C:      statusesC,
-		Id:     st.docID(globalKey),
+		Id:     backend.docID(globalKey),
 		Remove: true,
 	}
 }
