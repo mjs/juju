@@ -292,7 +292,7 @@ func (a *Application) removeOps(asserts bson.D) ([]txn.Op, error) {
 	globalKey := a.globalKey()
 	ops = append(ops,
 		removeEndpointBindingsOp(globalKey),
-		removeConstraintsOp(a.st, globalKey),
+		removeConstraintsOp(globalKey),
 		annotationRemoveOp(a.st, globalKey),
 		removeLeadershipSettingsOp(name),
 		removeStatusOp(a.st, globalKey),
@@ -1330,7 +1330,7 @@ func (a *Application) removeUnitOps(u *Unit, asserts bson.D) ([]txn.Op, error) {
 		removeMeterStatusOp(a.st, u.globalMeterStatusKey()),
 		removeStatusOp(a.st, u.globalAgentKey()),
 		removeStatusOp(a.st, u.globalKey()),
-		removeConstraintsOp(a.st, u.globalAgentKey()),
+		removeConstraintsOp(u.globalAgentKey()),
 		annotationRemoveOp(a.st, u.globalKey()),
 		newCleanupOp(cleanupRemovedUnit, u.doc.Name),
 	)

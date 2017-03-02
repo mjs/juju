@@ -5,7 +5,12 @@ package state
 
 import (
 	"github.com/juju/errors"
+	"github.com/juju/juju/state/storage"
+	"github.com/juju/juju/state/workers"
+	"github.com/juju/utils"
 	"github.com/juju/utils/clock"
+	"gopkg.in/juju/charm.v6-unstable"
+	csparams "gopkg.in/juju/charmrepo.v2-unstable/csclient/params"
 	"gopkg.in/juju/names.v2"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/txn"
@@ -47,21 +52,52 @@ func newCAASState(
 	}, nil
 }
 
+func (st *CAASState) db() Database {
+	return st.database
+}
+
+func (st *CAASState) txnLogWatcher() workers.TxnLogWatcher {
+	panic("not implemented")
+}
+
+func (st *CAASState) newStorage() storage.Storage {
+	return storage.NewStorage(st.modelTag.Id(), st.session)
+}
+
 func (st *CAASState) start() error {
 	// XXX workers
 	return nil
 }
 
-func (st *CAASState) Model() (*CAASModel, error) {
-	return nil, nil // XXX
+// XXX extract to dbIdMapper and embedded into State and CAAS state
+func (st *CAASState) docID(localID string) string {
+	return ensureModelUUID(st.ModelUUID(), localID)
 }
 
-// runTransaction is a convenience method delegating to the state's Database.
-// XXX this should be shared - need a base database/txn type that's shared by State and CAASState
-func (st *CAASState) runTransaction(ops []txn.Op) error {
-	runner, closer := st.database.TransactionRunner()
-	defer closer()
-	return runner.RunTransaction(ops)
+// XXX
+func (st *CAASState) localID(ID string) string {
+	modelUUID, localID, ok := splitDocID(ID)
+	if !ok || modelUUID != st.ModelUUID() {
+		return ID
+	}
+	return localID
+}
+
+// XXX
+func (st *CAASState) strictLocalID(ID string) (string, error) {
+	modelUUID, localID, ok := splitDocID(ID)
+	if !ok || modelUUID != st.ModelUUID() {
+		return "", errors.Errorf("unexpected id: %#v", ID)
+	}
+	return localID, nil
+}
+
+func (st *CAASState) ModelUUID() string {
+	return st.modelTag.Id()
+}
+
+func (st *CAASState) Model() (*CAASModel, error) {
+	return nil, nil // XXX
 }
 
 func (st *CAASState) Close() error {
@@ -111,4 +147,94 @@ func createCAASModelOp(
 		Assert: txn.DocMissing,
 		Insert: doc,
 	}
+}
+
+type AddCAASApplicationArgs struct {
+	Name     string
+	Charm    *Charm
+	Channel  csparams.Channel
+	Settings charm.Settings
+}
+
+// AddCAASApplication creates a new CAAS application, running the
+// supplied charm, with the supplied name (which must be unique).
+func (st *CAASState) AddCAASApplication(args AddCAASApplicationArgs) (_ *CAASApplication, err error) {
+	defer errors.DeferredAnnotatef(&err, "cannot add application %q", args.Name)
+	// Sanity checks.
+	if !names.IsValidApplication(args.Name) {
+		return nil, errors.Errorf("invalid name")
+	}
+	if args.Charm == nil {
+		return nil, errors.Errorf("charm is nil")
+	}
+
+	if err := validateCharmVersion(args.Charm); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if exists, err := isNotDead(st, applicationsC, args.Name); err != nil {
+		return nil, errors.Trace(err)
+	} else if exists {
+		return nil, errors.Errorf("application already exists")
+	}
+	/* XXX
+	if err := checkModelActive(st); err != nil {
+		return nil, errors.Trace(err)
+	}
+	*/
+
+	// The doc defaults to CharmModifiedVersion = 0, which is correct, since it
+	// has, by definition, at its initial state.
+	appDoc := &caasApplicationDoc{
+		DocID:        args.Name,
+		Name:         args.Name,
+		ModelUUID:    st.ModelUUID(),
+		CharmURL:     args.Charm.URL(),
+		Channel:      string(args.Channel),
+		Life:         Alive,
+		PasswordHash: utils.AgentPasswordHash("password"), // XXX just for the prototype!
+	}
+
+	app := newCAASApplication(st, appDoc)
+
+	buildTxn := func(attempt int) ([]txn.Op, error) {
+		// If we've tried once already and failed, check that
+		// model may have been destroyed.
+		if attempt > 0 {
+			/* XXX
+			if err := checkModelActive(st); err != nil {
+				return nil, errors.Trace(err)
+			}
+			*/
+			// Ensure a local application with the same name doesn't exist.
+			if exists, err := isNotDead(st, applicationsC, args.Name); err != nil {
+				return nil, errors.Trace(err)
+			} else if exists {
+				return nil, errLocalApplicationExists
+			}
+		}
+		// The addCAASApplicationOps does not include the model alive assertion,
+		// so we add it here.
+		ops := []txn.Op{
+			assertModelActiveOp(st.ModelUUID()),
+		}
+		addOps, err := addCAASApplicationOps(st, addCAASApplicationOpsArgs{
+			appDoc:   appDoc,
+			settings: map[string]interface{}(args.Settings),
+		})
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		ops = append(ops, addOps...)
+		return ops, nil
+	}
+	if err = st.db().Run(buildTxn); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	// Refresh to pick the txn-revno.
+	if err = app.Refresh(); err != nil {
+		return nil, errors.Trace(err)
+	}
+	return app, nil
 }

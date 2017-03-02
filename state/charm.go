@@ -19,7 +19,6 @@ import (
 
 	"github.com/juju/juju/mongo"
 	mongoutils "github.com/juju/juju/mongo/utils"
-	"github.com/juju/juju/state/storage"
 	jujuversion "github.com/juju/juju/version"
 )
 
@@ -192,7 +191,7 @@ func insertAnyCharmOps(st modelBackend, cdoc *charmDoc) ([]txn.Op, error) {
 // document with the supplied data, so long as the supplied assert still holds
 // true.
 func updateCharmOps(
-	st *State, info CharmInfo, assert bson.D,
+	st modelBackend, info CharmInfo, assert bson.D,
 ) ([]txn.Op, error) {
 
 	charms, closer := st.db().GetCollection(charmsC)
@@ -314,11 +313,11 @@ func safeConfig(ch charm.Charm) *charm.Config {
 
 // Charm represents the state of a charm in the model.
 type Charm struct {
-	st  *State
+	st  modelBackend
 	doc charmDoc
 }
 
-func newCharm(st *State, cdoc *charmDoc) *Charm {
+func newCharm(st modelBackend, cdoc *charmDoc) *Charm {
 	// Because we probably just read the doc from state, make sure we
 	// unescape any config option names for "$" and ".". See
 	// http://pad.lv/1308146
@@ -348,7 +347,7 @@ func (c *Charm) Life() Life {
 // Refresh loads fresh charm data from the database. In practice, the
 // only observable change should be to its Life value.
 func (c *Charm) Refresh() error {
-	ch, err := c.st.Charm(c.doc.URL)
+	ch, err := loadCharm(c.st, c.doc.URL)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -371,7 +370,7 @@ func (c *Charm) Destroy() error {
 		}
 		return ops, nil
 	}
-	if err := c.st.run(buildTxn); err != nil {
+	if err := c.st.db().Run(buildTxn); err != nil {
 		return errors.Trace(err)
 	}
 	c.doc.Life = Dying
@@ -386,7 +385,7 @@ func (c *Charm) Remove() error {
 		return errors.New("still alive")
 	}
 
-	stor := storage.NewStorage(c.st.ModelUUID(), c.st.MongoSession())
+	stor := c.st.newStorage()
 	err := stor.Remove(c.doc.StoragePath)
 	if errors.IsNotFound(err) {
 		// Not a problem, but we might still need to run the
@@ -403,7 +402,7 @@ func (c *Charm) Remove() error {
 		Id:     c.doc.URL.String(),
 		Remove: true,
 	}}
-	if err := c.st.runTransaction(removeOps); err != nil {
+	if err := c.st.db().RunTransaction(removeOps); err != nil {
 		return errors.Trace(err)
 	}
 	c.doc.Life = Dead
@@ -507,7 +506,7 @@ func (c *Charm) UpdateMacaroon(m macaroon.Slice) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if err := c.st.runTransaction(ops); err != nil {
+	if err := c.st.db().RunTransaction(ops); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
@@ -585,6 +584,10 @@ func (st *State) AllCharms() ([]*Charm, error) {
 // Charm returns the charm with the given URL. Charms pending upload
 // to storage and placeholders are never returned.
 func (st *State) Charm(curl *charm.URL) (*Charm, error) {
+	return loadCharm(st, curl)
+}
+
+func loadCharm(st modelBackend, curl *charm.URL) (*Charm, error) {
 	charms, closer := st.db().GetCollection(charmsC)
 	defer closer()
 

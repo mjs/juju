@@ -515,6 +515,11 @@ func (st *State) db() Database {
 	return st.database
 }
 
+// newStorage is part of the modelBackend interface.
+func (st *State) newStorage() storage.Storage {
+	return storage.NewStorage(st.ModelUUID(), st.MongoSession())
+}
+
 // txnLogWatcher returns the TxnLogWatcher for the State. It is part
 // of the modelBackend interface.
 func (st *State) txnLogWatcher() *watcher.Watcher {
