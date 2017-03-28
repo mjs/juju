@@ -6,7 +6,7 @@ package state
 import (
 	"github.com/juju/errors"
 	"github.com/juju/juju/state/storage"
-	"github.com/juju/juju/state/workers"
+	"github.com/juju/juju/state/watcher"
 	"github.com/juju/utils"
 	"github.com/juju/utils/clock"
 	"gopkg.in/juju/charm.v6-unstable"
@@ -56,7 +56,7 @@ func (st *CAASState) db() Database {
 	return st.database
 }
 
-func (st *CAASState) txnLogWatcher() workers.TxnLogWatcher {
+func (st *CAASState) txnLogWatcher() *watcher.Watcher {
 	panic("not implemented")
 }
 
