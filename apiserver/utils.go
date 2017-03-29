@@ -42,7 +42,7 @@ type validateArgs struct {
 // model.
 //
 // It returns the validated model UUID.
-func validateModelUUID(args validateArgs) (string, error) {
+func validateModelUUID(args validateArgs) (string, bool, error) {
 	ssState := args.statePool.SystemState()
 	if args.modelUUID == "" {
 		// We allow the modelUUID to be empty so that:
@@ -50,22 +50,29 @@ func validateModelUUID(args validateArgs) (string, error) {
 		//    just the user manager and model manager are able to accept
 		//    requests that don't require a modelUUID, like add-model.
 		if args.strict {
-			return "", errors.Trace(common.UnknownModelError(args.modelUUID))
+			return "", false, errors.Trace(common.UnknownModelError(args.modelUUID))
 		}
-		return ssState.ModelUUID(), nil
+		return ssState.ModelUUID(), false, nil
 	}
 	if args.modelUUID == ssState.ModelUUID() {
-		return args.modelUUID, nil
+		return args.modelUUID, false, nil
 	}
 	if args.controllerModelOnly {
-		return "", errors.Unauthorizedf("requested model %q is not the controller model", args.modelUUID)
+		return "", false, errors.Unauthorizedf("requested model %q is not the controller model", args.modelUUID)
 	}
 	if !names.IsValidModel(args.modelUUID) {
-		return "", errors.Trace(common.UnknownModelError(args.modelUUID))
+		return "", false, errors.Trace(common.UnknownModelError(args.modelUUID))
 	}
+
+	if caasExists, err := ssState.IsCAASModel(args.modelUUID); err != nil {
+		return "", false, errors.Wrap(err, common.UnknownModelError(args.modelUUID))
+	} else if caasExists {
+		return args.modelUUID, true, nil
+	}
+
 	modelTag := names.NewModelTag(args.modelUUID)
 	if _, err := ssState.GetModel(modelTag); err != nil {
-		return "", errors.Wrap(err, common.UnknownModelError(args.modelUUID))
+		return "", false, errors.Wrap(err, common.UnknownModelError(args.modelUUID))
 	}
-	return args.modelUUID, nil
+	return args.modelUUID, false, nil
 }
