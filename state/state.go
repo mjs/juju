@@ -317,6 +317,18 @@ func (st *State) ForModel(modelTag names.ModelTag) (*State, error) {
 	return newSt, nil
 }
 
+// ForCAASModel returns a CAASState for the specified CAAS model. The
+// connection uses the same credentials and policy as the existing connection.
+//
+// XXX shouldn't this error if the model doesn't exist? (same for ForModel above)
+func (st *State) ForCAASModel(modelTag names.ModelTag) (*CAASState, error) {
+	newSt, err := newCAASState(st, modelTag, st.clock)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return newSt, nil
+}
+
 // start makes a *State functional post-creation, by:
 //   * setting controllerTag, cloudName and leaseClientId
 //   * starting lease managers and watcher backends
