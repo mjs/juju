@@ -245,7 +245,10 @@ use "juju unregister %s" to remove the existing controller.`[1:], c.domain, c.co
 		if err := store.UpdateModel(
 			c.controllerName,
 			jujuclient.JoinOwnerModelName(owner, model.Name),
-			jujuclient.ModelDetails{model.UUID},
+			jujuclient.ModelDetails{
+				ModelUUID: model.UUID,
+				Type:      jujuclient.IAASModel,
+			},
 		); err != nil {
 			return errors.Annotate(err, "storing model details")
 		}
