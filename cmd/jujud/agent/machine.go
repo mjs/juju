@@ -1020,7 +1020,7 @@ func (a *MachineAgent) startStateWorkers(
 					ControllerUUID: st.ControllerUUID(),
 					Backend:        st,
 					NewWorker:      a.startCAASModelWorkers,
-					ErrorDelay:     worker.RestartDelay,
+					ErrorDelay:     jworker.RestartDelay,
 				})
 				if err != nil {
 					return nil, errors.Annotate(err, "cannot start CAAS model worker manager")
