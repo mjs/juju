@@ -53,29 +53,30 @@ const loginRateLimit = 10
 
 // Server holds the server side of the API.
 type Server struct {
-	tomb             tomb.Tomb
-	clock            clock.Clock
-	pingClock        clock.Clock
-	wg               sync.WaitGroup
-	state            *state.State
-	statePool        *state.StatePool
-	lis              net.Listener
-	tag              names.Tag
-	dataDir          string
-	logDir           string
-	limiter          utils.Limiter
-	validator        LoginValidator
-	facades          *facade.Registry
-	modelUUID        string
-	authCtxt         *authContext
-	lastConnectionID uint64
-	centralHub       *pubsub.StructuredHub
-	newObserver      observer.ObserverFactory
-	connCount        int64
-	certChanged      <-chan params.StateServingInfo
-	tlsConfig        *tls.Config
-	allowModelAccess bool
-	logSinkWriter    io.WriteCloser
+	tomb              tomb.Tomb
+	clock             clock.Clock
+	pingClock         clock.Clock
+	wg                sync.WaitGroup
+	state             *state.State
+	statePool         *state.StatePool
+	caasStatePool     *state.CAASStatePool
+	lis               net.Listener
+	tag               names.Tag
+	dataDir           string
+	logDir            string
+	limiter           utils.Limiter
+	validator         LoginValidator
+	facades           *facade.Registry
+	modelUUID         string
+	authCtxt          *authContext
+	lastConnectionID  uint64
+	centralHub        *pubsub.StructuredHub
+	newObserver       observer.ObserverFactory
+	connCount         int64
+	certChanged       <-chan params.StateServingInfo
+	tlsConfig         *tls.Config
+	allowModelAccess  bool
+	logSinkWriter     io.WriteCloser
 
 	// mu guards the fields below it.
 	mu sync.Mutex
@@ -209,6 +210,7 @@ func newServer(s *state.State, lis net.Listener, cfg ServerConfig) (_ *Server, e
 		newObserver:                   cfg.NewObserver,
 		state:                         s,
 		statePool:                     stPool,
+		caasStatePool:                 state.NewCAASStatePool(s),
 		tag:                           cfg.Tag,
 		dataDir:                       cfg.DataDir,
 		logDir:                        cfg.LogDir,
@@ -337,6 +339,7 @@ func (srv *Server) run() {
 
 		srv.wg.Wait() // wait for any outstanding requests to complete.
 		srv.tomb.Done()
+		srv.caasStatePool.Close()
 		srv.statePool.Close()
 		srv.state.Close()
 		srv.logSinkWriter.Close()
@@ -691,10 +694,13 @@ func (srv *Server) serveConn(wsConn *websocket.Conn, modelUUID string, apiObserv
 	// Note that we don't overwrite modelUUID here because
 	// newAPIHandler treats an empty modelUUID as signifying
 	// the API version used.
-	resolvedModelUUID, err := validateModelUUID(validateArgs{
+	resolvedModelUUID, isCAAS, err := validateModelUUID(validateArgs{
 		statePool: srv.statePool,
 		modelUUID: modelUUID,
 	})
+	if isCAAS {
+		panic("not done yet")
+	}
 	var (
 		st       *state.State
 		h        *apiHandler

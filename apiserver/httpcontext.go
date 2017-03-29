@@ -33,7 +33,12 @@ type httpContext struct {
 // using for the model implicit in the given request
 // without checking any authentication information.
 func (ctxt *httpContext) stateForRequestUnauthenticated(r *http.Request) (*state.State, func(), error) {
-	modelUUID, err := validateModelUUID(validateArgs{
+	modelUUID, _, err := ctxt.modelUUIDFromRequest(r)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+	var isCAAS bool
+	modelUUID, isCAAS, err = validateModelUUID(validateArgs{
 		statePool:           ctxt.srv.statePool,
 		modelUUID:           r.URL.Query().Get(":modeluuid"),
 		strict:              ctxt.strictValidation,
@@ -41,6 +46,9 @@ func (ctxt *httpContext) stateForRequestUnauthenticated(r *http.Request) (*state
 	})
 	if err != nil {
 		return nil, nil, errors.Trace(err)
+	}
+	if isCAAS {
+		panic("no CAAS support here yet")
 	}
 	st, releaser, err := ctxt.srv.statePool.Get(modelUUID)
 	if err != nil {
@@ -135,13 +143,16 @@ func (ctxt *httpContext) stateForMigration(r *http.Request, requiredMode state.M
 		return nil, nil, errors.Unauthorizedf("not a controller admin")
 	}
 
-	modelUUID, err := validateModelUUID(validateArgs{
+	modelUUID, isCAAS, err := validateModelUUID(validateArgs{
 		statePool: ctxt.srv.statePool,
 		modelUUID: r.Header.Get(params.MigrationModelHTTPHeader),
 		strict:    true,
 	})
 	if err != nil {
 		return nil, nil, errors.Trace(err)
+	}
+	if isCAAS {
+		panic("no CAAS support here")
 	}
 	migrationSt, migrationReleaser, err := ctxt.srv.statePool.Get(modelUUID)
 	if err != nil {
