@@ -8,9 +8,9 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/juju/loggo"
+	"gopkg.in/juju/worker.v1"
 
 	"github.com/juju/juju/state"
-	"github.com/juju/juju/worker"
 	"github.com/juju/juju/worker/catacomb"
 )
 
@@ -74,7 +74,7 @@ func New(config Config) (worker.Worker, error) {
 type caasModelWorkerManager struct {
 	catacomb catacomb.Catacomb
 	config   Config
-	runner   worker.Runner
+	runner   *worker.Runner
 }
 
 // Kill satisfies the Worker interface.
@@ -88,7 +88,11 @@ func (m *caasModelWorkerManager) Wait() error {
 }
 
 func (m *caasModelWorkerManager) loop() error {
-	m.runner = worker.NewRunner(neverFatal, neverImportant, m.config.ErrorDelay)
+	m.runner = worker.NewRunner(worker.RunnerParams{
+		IsFatal:       neverFatal,
+		MoreImportant: neverImportant,
+		RestartDelay:  m.config.ErrorDelay,
+	})
 	if err := m.catacomb.Add(m.runner); err != nil {
 		return errors.Trace(err)
 	}
