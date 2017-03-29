@@ -5,13 +5,15 @@ package state
 
 import (
 	"github.com/juju/errors"
+	"github.com/juju/juju/mongo"
 	"gopkg.in/juju/names.v2"
+	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	"gopkg.in/mgo.v2/txn"
 )
 
 type CAASModel struct {
-	st  *State
+	st  *CAASState
 	doc caasModelDoc
 }
 
@@ -98,4 +100,32 @@ func (st *State) NewCAASModel(args CAASModelArgs) (*CAASModel, *CAASState, error
 	}
 
 	return caasModel, caasSt, nil
+}
+
+func (st *State) IsCAASModel(uuid string) (bool, error) {
+	models, closer := st.db().GetCollection(caasModelsC)
+	defer closer()
+	n, err := models.FindId(uuid).Count()
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	return n > 0, nil
+}
+
+func (m *CAASModel) UUID() string {
+	return m.doc.UUID
+}
+
+func (m *CAASModel) Refresh() error {
+	models, closer := m.st.db().GetCollection(caasModelsC)
+	defer closer()
+	return m.refresh(models.FindId(m.UUID()))
+}
+
+func (m *CAASModel) refresh(query mongo.Query) error {
+	err := query.One(&m.doc)
+	if err == mgo.ErrNotFound {
+		return errors.NotFoundf("caas model")
+	}
+	return err
 }
