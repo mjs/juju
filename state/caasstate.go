@@ -16,6 +16,7 @@ import (
 
 	"github.com/juju/juju/state/storage"
 	"github.com/juju/juju/state/watcher"
+	"github.com/juju/juju/status"
 )
 
 type CAASState struct {
@@ -49,6 +50,10 @@ func newCAASState(parentSt *State, modelTag names.ModelTag, clock clock.Clock) (
 		database:      database,
 		clock:         clock,
 	}, nil
+}
+
+func (st *CAASState) modelClock() clock.Clock {
+	return st.clock
 }
 
 func (st *CAASState) db() Database {
@@ -184,6 +189,7 @@ type AddCAASApplicationArgs struct {
 	Charm    *Charm
 	Channel  csparams.Channel
 	Settings charm.Settings
+	NumUnits int
 }
 
 // AddCAASApplication creates a new CAAS application, running the
@@ -227,6 +233,14 @@ func (st *CAASState) AddCAASApplication(args AddCAASApplicationArgs) (_ *CAASApp
 
 	app := newCAASApplication(st, appDoc)
 
+	statusDoc := statusDoc{
+		ModelUUID:  st.ModelUUID(),
+		Status:     status.Waiting,
+		StatusInfo: status.MessageWaitForMachine, // XXX caas todo - review messages
+		Updated:    st.clock.Now().UnixNano(),
+		NeverSet:   true,
+	}
+
 	buildTxn := func(attempt int) ([]txn.Op, error) {
 		// If we've tried once already and failed, check that
 		// model may have been destroyed.
@@ -256,8 +270,22 @@ func (st *CAASState) AddCAASApplication(args AddCAASApplicationArgs) (_ *CAASApp
 			return nil, errors.Trace(err)
 		}
 		ops = append(ops, addOps...)
+
+		// Collect unit-adding operations.
+		for x := 0; x < args.NumUnits; x++ {
+			_, unitOps, err := app.addApplicationUnitOps(caasApplicationAddCAASUnitOpsArgs{})
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			ops = append(ops, unitOps...)
+		}
+
 		return ops, nil
 	}
+
+	// At the last moment before inserting the application, prime status history.
+	probablyUpdateStatusHistory(st, app.globalKey(), statusDoc)
+
 	if err = st.db().Run(buildTxn); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -290,4 +318,42 @@ func (st *CAASState) AllCharms() ([]*Charm, error) {
 // to storage and placeholders are never returned.
 func (st *CAASState) Charm(curl *charm.URL) (*Charm, error) {
 	return loadCharm(st, curl)
+}
+
+// CAASApplication returns a caasapplication state by name.
+func (st *CAASState) CAASApplication(name string) (_ *CAASApplication, err error) {
+	applications, closer := st.db().GetCollection(caasApplicationsC)
+	defer closer()
+
+	if !names.IsValidApplication(name) {
+		return nil, errors.Errorf("%q is not a valid application name", name)
+	}
+	sdoc := &caasApplicationDoc{}
+	err = applications.FindId(name).One(sdoc)
+	if err == mgo.ErrNotFound {
+		return nil, errors.NotFoundf("application %q", name)
+	}
+	if err != nil {
+		return nil, errors.Annotatef(err, "cannot get application %q", name)
+	}
+	return newCAASApplication(st, sdoc), nil
+}
+
+// CAASUnit returns a unit by name.
+func (st *CAASState) CAASUnit(name string) (*CAASUnit, error) {
+	if !names.IsValidUnit(name) {
+		return nil, errors.Errorf("%q is not a valid unit name", name)
+	}
+	caasUnits, closer := st.db().GetCollection(caasUnitsC)
+	defer closer()
+
+	doc := caasUnitDoc{}
+	err := caasUnits.FindId(name).One(&doc)
+	if err == mgo.ErrNotFound {
+		return nil, errors.NotFoundf("unit %q", name)
+	}
+	if err != nil {
+		return nil, errors.Annotatef(err, "cannot get unit %q", name)
+	}
+	return newCAASUnit(st, &doc), nil
 }

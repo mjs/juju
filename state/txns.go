@@ -12,8 +12,8 @@ import (
 	"gopkg.in/mgo.v2/txn"
 )
 
-func (st *State) readTxnRevno(collectionName string, id interface{}) (int64, error) {
-	collection, closer := st.database.GetCollection(collectionName)
+func readTxnRevno(st modelBackend, collectionName string, id interface{}) (int64, error) {
+	collection, closer := st.db().GetCollection(collectionName)
 	defer closer()
 	query := collection.FindId(id).Select(bson.D{{"txn-revno", 1}})
 	var result struct {
@@ -24,6 +24,10 @@ func (st *State) readTxnRevno(collectionName string, id interface{}) (int64, err
 }
 
 func (st *State) runTransaction(ops []txn.Op) error {
+	return st.database.RunTransaction(ops)
+}
+
+func (st *CAASState) runTransaction(ops []txn.Op) error {
 	return st.database.RunTransaction(ops)
 }
 

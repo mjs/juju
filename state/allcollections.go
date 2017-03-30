@@ -521,6 +521,7 @@ const (
 	txnLogC                  = "txns.log"
 	txnsC                    = "txns"
 	unitsC                   = "units"
+	caasUnitsC               = "caasunits"
 	upgradeInfoC             = "upgradeInfo"
 	userLastLoginC           = "userLastLogin"
 	usermodelnameC           = "usermodelname"

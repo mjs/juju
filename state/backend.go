@@ -5,6 +5,7 @@ package state
 
 import (
 	"github.com/juju/errors"
+	"github.com/juju/utils/clock"
 
 	"github.com/juju/juju/state/storage"
 	"github.com/juju/juju/state/watcher"
@@ -19,6 +20,8 @@ type modelBackend interface {
 	// docID generates a globally unique ID value where the model
 	// UUID is prefixed to the localID.
 	docID(string) string
+
+	modelClock() clock.Clock
 
 	// localID returns the local ID value by stripping
 	// off the model UUID prefix if it is there.

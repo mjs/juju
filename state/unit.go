@@ -2519,7 +2519,7 @@ func addUnitOps(st *State, args addUnitOpsArgs) ([]txn.Op, error) {
 
 // HistoryGetter allows getting the status history based on some identifying key.
 type HistoryGetter struct {
-	st        *State
+	st        modelBackend
 	globalKey string
 }
 
