@@ -148,10 +148,10 @@ func updateAnnotations(st *State, entity GlobalEntity, toUpdate, toRemove bson.M
 
 // annotationRemoveOp returns an operation to remove a given annotation
 // document from MongoDB.
-func annotationRemoveOp(st *State, id string) txn.Op {
+func annotationRemoveOp(mb modelBackend, id string) txn.Op {
 	return txn.Op{
 		C:      annotationsC,
-		Id:     st.docID(id),
+		Id:     mb.docID(id),
 		Remove: true,
 	}
 }

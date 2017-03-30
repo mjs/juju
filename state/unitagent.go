@@ -112,6 +112,10 @@ func unitAgentGlobalKey(name string) string {
 	return "u#" + name
 }
 
+func caasUnitAgentGlobalKey(name string) string {
+	return "cu#" + name
+}
+
 // globalKey returns the global database key for the unit.
 func (u *UnitAgent) globalKey() string {
 	return unitAgentGlobalKey(u.name)

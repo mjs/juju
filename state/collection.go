@@ -16,7 +16,12 @@ import (
 // should be rarely used. getCollection() should be used in almost all
 // cases.
 func (st *State) getRawCollection(name string) (*mgo.Collection, func()) {
-	collection, closer := st.database.GetCollection(name)
+	collection, closer := st.db().GetCollection(name)
+	return collection.Writeable().Underlying(), closer
+}
+
+func (st *CAASState) getRawCollection(name string) (*mgo.Collection, func()) {
+	collection, closer := st.db().GetCollection(name)
 	return collection.Writeable().Underlying(), closer
 }
 

@@ -49,9 +49,9 @@ func unixNanoToTime(i int64) *time.Time {
 // getStatus retrieves the status document associated with the given
 // globalKey and converts it to a StatusInfo. If the status document
 // is not found, a NotFoundError referencing badge will be returned.
-func getStatus(st *State, globalKey, badge string) (_ status.StatusInfo, err error) {
+func getStatus(mb modelBackend, globalKey, badge string) (_ status.StatusInfo, err error) {
 	defer errors.DeferredAnnotatef(&err, "cannot get status")
-	statuses, closer := st.getCollection(statusesC)
+	statuses, closer := mb.db().GetCollection(statusesC)
 	defer closer()
 
 	var doc statusDoc
@@ -99,10 +99,10 @@ type setStatusParams struct {
 }
 
 // setStatus inteprets the supplied params as documented on the type.
-func setStatus(st *State, params setStatusParams) (err error) {
+func setStatus(st modelBackend, params setStatusParams) (err error) {
 	defer errors.DeferredAnnotatef(&err, "cannot set status")
 	if params.updated == nil {
-		now := st.clock.Now()
+		now := st.modelClock().Now()
 		params.updated = &now
 	}
 	doc := statusDoc{
@@ -120,16 +120,16 @@ func setStatus(st *State, params setStatusParams) (err error) {
 	if params.token != nil {
 		buildTxn = buildTxnWithLeadership(buildTxn, params.token)
 	}
-	err = st.run(buildTxn)
+	err = st.db().Run(buildTxn)
 	if cause := errors.Cause(err); cause == mgo.ErrNotFound {
 		return errors.NotFoundf(params.badge)
 	}
 	return errors.Trace(err)
 }
 
-func statusSetOps(st *State, doc statusDoc, globalKey string) ([]txn.Op, error) {
+func statusSetOps(st modelBackend, doc statusDoc, globalKey string) ([]txn.Op, error) {
 	update := bson.D{{"$set", &doc}}
-	txnRevno, err := st.readTxnRevno(statusesC, globalKey)
+	txnRevno, err := readTxnRevno(st, statusesC, globalKey)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -144,7 +144,7 @@ func statusSetOps(st *State, doc statusDoc, globalKey string) ([]txn.Op, error) 
 
 // createStatusOp returns the operation needed to create the given status
 // document associated with the given globalKey.
-func createStatusOp(st *State, globalKey string, doc statusDoc) txn.Op {
+func createStatusOp(st modelBackend, globalKey string, doc statusDoc) txn.Op {
 	return txn.Op{
 		C:      statusesC,
 		Id:     st.docID(globalKey),
@@ -175,7 +175,7 @@ type historicalStatusDoc struct {
 	Updated int64 `bson:"updated"`
 }
 
-func probablyUpdateStatusHistory(st *State, globalKey string, doc statusDoc) {
+func probablyUpdateStatusHistory(mb modelBackend, globalKey string, doc statusDoc) {
 	historyDoc := &historicalStatusDoc{
 		Status:     doc.Status,
 		StatusInfo: doc.StatusInfo,
@@ -183,7 +183,7 @@ func probablyUpdateStatusHistory(st *State, globalKey string, doc statusDoc) {
 		Updated:    doc.Updated,
 		GlobalKey:  globalKey,
 	}
-	history, closer := st.getCollection(statusesHistoryC)
+	history, closer := mb.db().GetCollection(statusesHistoryC)
 	defer closer()
 	historyW := history.Writeable()
 	if err := historyW.Insert(historyDoc); err != nil {
@@ -193,7 +193,7 @@ func probablyUpdateStatusHistory(st *State, globalKey string, doc statusDoc) {
 
 // statusHistoryArgs hold the arguments to call statusHistory.
 type statusHistoryArgs struct {
-	st        *State
+	st        modelBackend
 	globalKey string
 	filter    status.StatusHistoryFilter
 }
@@ -241,7 +241,7 @@ func statusHistory(args *statusHistoryArgs) ([]status.StatusInfo, error) {
 	if err := args.filter.Validate(); err != nil {
 		return nil, errors.Annotate(err, "validating arguments")
 	}
-	statusHistory, closer := args.st.getCollection(statusesHistoryC)
+	statusHistory, closer := args.st.db().GetCollection(statusesHistoryC)
 	defer closer()
 
 	var results []status.StatusInfo

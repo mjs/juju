@@ -1341,7 +1341,7 @@ func (a *Application) Relations() (relations []*Relation, err error) {
 
 func applicationRelations(st *State, name string) (relations []*Relation, err error) {
 	defer errors.DeferredAnnotatef(&err, "can't get relations for application %q", name)
-	relationsCollection, closer := st.getCollection(relationsC)
+	relationsCollection, closer := st.db().GetCollection(relationsC)
 	defer closer()
 
 	docs := []relationDoc{}
