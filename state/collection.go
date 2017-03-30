@@ -15,7 +15,12 @@ import (
 // model filtering is performed by the returned collection it
 // should be rarely used.
 func (st *State) getRawCollection(name string) (*mgo.Collection, func()) {
-	collection, closer := st.database.GetCollection(name)
+	collection, closer := st.db().GetCollection(name)
+	return collection.Writeable().Underlying(), closer
+}
+
+func (st *CAASState) getRawCollection(name string) (*mgo.Collection, func()) {
+	collection, closer := st.db().GetCollection(name)
 	return collection.Writeable().Underlying(), closer
 }
 

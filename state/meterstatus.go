@@ -143,10 +143,10 @@ func createMeterStatusOp(st *State, globalKey string, doc *meterStatusDoc) txn.O
 
 // removeMeterStatusOp returns the operation needed to remove the meter status
 // document associated with the given globalKey.
-func removeMeterStatusOp(st *State, globalKey string) txn.Op {
+func removeMeterStatusOp(mb modelBackend, globalKey string) txn.Op {
 	return txn.Op{
 		C:      meterStatusC,
-		Id:     st.docID(globalKey),
+		Id:     mb.docID(globalKey),
 		Remove: true,
 	}
 }

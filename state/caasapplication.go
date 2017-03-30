@@ -4,6 +4,8 @@
 package state
 
 import (
+	"strconv"
+
 	"github.com/juju/errors"
 	jujutxn "github.com/juju/txn"
 	"gopkg.in/juju/charm.v6-unstable"
@@ -12,6 +14,9 @@ import (
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	"gopkg.in/mgo.v2/txn"
+
+	"github.com/juju/juju/constraints"
+	"github.com/juju/juju/status"
 )
 
 // CAASApplication represents the state of an application.
@@ -31,6 +36,8 @@ type caasApplicationDoc struct {
 	CharmModifiedVersion int        `bson:"charmmodifiedversion"`
 	ForceCharm           bool       `bson:"forcecharm"`
 	Life                 Life       `bson:"life"`
+	UnitCount            int        `bson:"unitcount"`
+	RelationCount        int        `bson:"relationcount"`
 	PasswordHash         string     `bson:"passwordhash"` // XXX needs to be populated: see unit code
 }
 
@@ -390,6 +397,255 @@ func (a *CAASApplication) Refresh() error {
 		return errors.Errorf("cannot refresh application %q: %v", a, err)
 	}
 	return nil
+}
+
+// newUnitName returns the next unit name.
+func (a *CAASApplication) newUnitName() (string, error) {
+	unitSeq, err := a.st.sequence(a.Tag().String())
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	name := a.doc.Name + "/" + strconv.Itoa(unitSeq)
+	return name, nil
+}
+
+// addCAASUnitOps returns a unique name for a new unit, and a list of txn operations
+// necessary to create that unit. The asserts param can be used
+// to include additional assertions for the application document.  This method
+// assumes that the application already exists in the db.
+func (a *CAASApplication) addCAASUnitOps(asserts bson.D) (string, []txn.Op, error) {
+	var cons constraints.Value
+	var storageCons map[string]StorageConstraints
+	args := caasApplicationAddCAASUnitOpsArgs{
+		cons:        cons,
+		storageCons: storageCons,
+	}
+
+	names, ops, err := a.addCAASUnitOpsWithCons(args)
+	if err != nil {
+		return names, ops, err
+	}
+	// we verify the application is alive
+	asserts = append(isAliveDoc, asserts...)
+	ops = append(ops, a.incUnitCountOp(asserts))
+	return names, ops, err
+}
+
+// the members of this type are currently ignored for CAASApplications, but remain for compatibility with State.
+type caasApplicationAddCAASUnitOpsArgs struct {
+	cons        constraints.Value
+	storageCons map[string]StorageConstraints
+}
+
+func (a *CAASApplication) addApplicationUnitOps(args caasApplicationAddCAASUnitOpsArgs) (string, []txn.Op, error) {
+	names, ops, err := a.addCAASUnitOpsWithCons(args)
+	if err == nil {
+		ops = append(ops, a.incUnitCountOp(nil))
+	}
+	return names, ops, err
+}
+
+func (a *CAASApplication) addCAASUnitOpsWithCons(args caasApplicationAddCAASUnitOpsArgs) (string, []txn.Op, error) {
+	name, err := a.newUnitName()
+	if err != nil {
+		return "", nil, err
+	}
+
+	docID := a.st.docID(name)
+	globalKey := unitGlobalKey(name)
+	agentGlobalKey := unitAgentGlobalKey(name)
+	udoc := &caasUnitDoc{
+		DocID:           docID,
+		Name:            name,
+		CAASApplication: a.doc.Name,
+		Life:            Alive,
+	}
+	now := a.st.clock.Now()
+	agentStatusDoc := statusDoc{
+		Status:  status.Allocating,
+		Updated: now.UnixNano(),
+	}
+	unitStatusDoc := statusDoc{
+		Status:     status.Waiting,
+		StatusInfo: status.MessageWaitForMachine,
+		Updated:    now.UnixNano(),
+	}
+	workloadVersionDoc := statusDoc{
+		Status:  status.Unknown,
+		Updated: now.UnixNano(),
+	}
+
+	ops, err := addCAASUnitOps(a.st, addCAASUnitOpsArgs{
+		caasUnitDoc:        udoc,
+		agentStatusDoc:     agentStatusDoc,
+		workloadStatusDoc:  unitStatusDoc,
+		workloadVersionDoc: workloadVersionDoc,
+		meterStatusDoc:     &meterStatusDoc{Code: MeterNotSet.String()},
+	})
+	if err != nil {
+		return "", nil, errors.Trace(err)
+	}
+
+	// At the last moment we still have the statusDocs in scope, set the initial
+	// history entries. This is risky, and may lead to extra entries, but that's
+	// an intrinsic problem with mixing txn and non-txn ops -- we can't sync
+	// them cleanly.
+	probablyUpdateStatusHistory(a.st, globalKey, unitStatusDoc)
+	probablyUpdateStatusHistory(a.st, agentGlobalKey, agentStatusDoc)
+	probablyUpdateStatusHistory(a.st, globalWorkloadVersionKey(name), workloadVersionDoc)
+	return name, ops, nil
+}
+
+// incUnitCountOp returns the operation to increment the application's unit count.
+func (a *CAASApplication) incUnitCountOp(asserts bson.D) txn.Op {
+	op := txn.Op{
+		C:      applicationsC,
+		Id:     a.doc.DocID,
+		Update: bson.D{{"$inc", bson.D{{"unitcount", 1}}}},
+	}
+	if len(asserts) > 0 {
+		op.Assert = asserts
+	}
+	return op
+}
+
+// AddCAASUnit adds a new unit to the application.
+func (a *CAASApplication) AddCAASUnit() (caasunit *CAASUnit, err error) {
+	defer errors.DeferredAnnotatef(&err, "cannot add CAASUnit to CAASApplication %q", a)
+	name, ops, err := a.addCAASUnitOps(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := a.st.runTransaction(ops); err == txn.ErrAborted {
+		if alive, err := isAlive(a.st, applicationsC, a.doc.DocID); err != nil {
+			return nil, err
+		} else if !alive {
+			return nil, errors.New("application is not alive")
+		}
+		return nil, errors.New("inconsistent state")
+	} else if err != nil {
+		return nil, err
+	}
+	return a.st.CAASUnit(name)
+}
+
+// removeUnitOps returns the operations necessary to remove the supplied unit,
+// assuming the supplied asserts apply to the unit document.
+func (a *CAASApplication) removeUnitOps(u *CAASUnit, asserts bson.D) ([]txn.Op, error) {
+	observedFieldsMatch := bson.D{
+		{"charmurl", u.doc.CharmURL},
+	}
+	var ops []txn.Op
+	ops = append(ops,
+		txn.Op{
+			C:      caasUnitsC,
+			Id:     u.doc.DocID,
+			Assert: append(observedFieldsMatch, asserts...),
+			Remove: true,
+		},
+		removeMeterStatusOp(a.st, u.globalMeterStatusKey()),
+		removeStatusOp(a.st, u.globalAgentKey()),
+		removeStatusOp(a.st, u.globalKey()),
+		removeConstraintsOp(u.globalAgentKey()),
+		annotationRemoveOp(a.st, u.globalKey()),
+		newCleanupOp(cleanupRemovedUnit, u.doc.Name),
+	)
+
+	if u.doc.CharmURL != nil {
+		decOps, err := appCharmDecRefOps(a.st, a.doc.Name, u.doc.CharmURL)
+		if errors.IsNotFound(err) {
+			return nil, errRefresh
+		} else if err != nil {
+			return nil, err
+		}
+		ops = append(ops, decOps...)
+	}
+	if a.doc.Life == Dying && a.doc.RelationCount == 0 && a.doc.UnitCount == 1 {
+		hasLastRef := bson.D{{"life", Dying}, {"relationcount", 0}, {"unitcount", 1}}
+		removeOps, err := a.removeOps(hasLastRef)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return append(ops, removeOps...), nil
+	}
+	svcOp := txn.Op{
+		C:      caasApplicationsC,
+		Id:     a.doc.DocID,
+		Update: bson.D{{"$inc", bson.D{{"unitcount", -1}}}},
+	}
+	if a.doc.Life == Alive {
+		svcOp.Assert = bson.D{{"life", Alive}, {"unitcount", bson.D{{"$gt", 0}}}}
+	} else {
+		svcOp.Assert = bson.D{
+			{"life", Dying},
+			{"$or", []bson.D{
+				{{"unitcount", bson.D{{"$gt", 1}}}},
+				{{"relationcount", bson.D{{"$gt", 0}}}},
+			}},
+		}
+	}
+	ops = append(ops, svcOp)
+
+	return ops, nil
+}
+
+func removeCAASUnitResourcesOps(st *State, unitID string) ([]txn.Op, error) {
+	persist, err := st.ResourcesPersistence()
+	if errors.IsNotSupported(err) {
+		// Nothing to see here, move along.
+		return nil, nil
+	}
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	ops, err := persist.NewRemoveUnitResourcesOps(unitID)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return ops, nil
+}
+
+// AllUnits returns all units of the application.
+func (a *CAASApplication) AllCAASUnits() (units []*CAASUnit, err error) {
+	return allCAASUnits(a.st, a.doc.Name)
+}
+
+func allCAASUnits(st *CAASState, caasApplication string) (units []*CAASUnit, err error) {
+	caasUnitsCollection, closer := st.database.GetCollection(caasUnitsC)
+	defer closer()
+
+	docs := []caasUnitDoc{}
+	err = caasUnitsCollection.Find(bson.D{{"caasapplication", caasApplication}}).All(&docs)
+	if err != nil {
+		return nil, errors.Errorf("cannot get all caasunits from vaasapplication %q: %v", caasApplication, err)
+	}
+	for i := range docs {
+		units = append(units, newCAASUnit(st, &docs[i]))
+	}
+	return units, nil
+}
+
+func caasApplicationRelations(st *CAASState, name string) (relations []*Relation, err error) {
+	defer errors.DeferredAnnotatef(&err, "can't get relations for application %q", name)
+	relationsCollection, closer := st.database.GetCollection(relationsC)
+	defer closer()
+
+	docs := []relationDoc{}
+	err = relationsCollection.Find(bson.D{{"endpoints.applicationname", name}}).All(&docs)
+	if err != nil {
+		return nil, err
+	}
+	// XXX
+	// for _, v := range docs {
+	// 	relations = append(relations, newRelation(st, &v))
+	// }
+	return relations, nil
+}
+
+// Relations returns a Relation for every relation the application is in.
+func (a *CAASApplication) Relations() (relations []*Relation, err error) {
+	return caasApplicationRelations(a.st, a.doc.Name)
 }
 
 // ConfigSettings returns the raw user configuration for the application's charm.
