@@ -63,6 +63,11 @@ func (a *admin) login(req params.LoginRequest, loginVersion int) (params.LoginRe
 		a.root,
 	)
 
+	if a.root.state.IsCAAS() {
+		panic("XXX")
+
+	}
+
 	// Use the login validation function, if one was specified.
 	if a.srv.validator != nil {
 		err := a.srv.validator(req)
@@ -143,7 +148,7 @@ func (a *admin) login(req params.LoginRequest, loginVersion int) (params.LoginRe
 		controllerMachineLogin = true
 	}
 	a.root.entity = entity
-	a.apiObserver.Login(entity.Tag(), a.root.state.ModelTag(), controllerMachineLogin, req.UserData)
+	a.apiObserver.Login(entity.Tag(), a.root.state.State().ModelTag(), controllerMachineLogin, req.UserData)
 
 	// We have authenticated the user; enable the appropriate API
 	// to serve to them.
@@ -168,17 +173,17 @@ func (a *admin) login(req params.LoginRequest, loginVersion int) (params.LoginRe
 		if controllerOnlyLogin {
 			logger.Debugf("controller login: %s", entity.Tag())
 		} else {
-			logger.Debugf("model login: %s for %s", entity.Tag(), a.root.state.ModelTag().Id())
+			logger.Debugf("model login: %s for %s", entity.Tag(), a.root.state.State().ModelTag().Id())
 		}
 	}
 
 	// Fetch the API server addresses from state.
-	hostPorts, err := a.root.state.APIHostPorts()
+	hostPorts, err := a.root.state.State().APIHostPorts()
 	if err != nil {
 		return fail, errors.Trace(err)
 	}
 
-	model, err := a.root.state.Model()
+	model, err := a.root.state.State().Model()
 	if err != nil {
 		return fail, errors.Trace(err)
 	}
@@ -229,7 +234,7 @@ func (a *admin) checkUserPermissions(userTag names.UserTag, controllerOnlyLogin 
 	everyoneGroupAccess := permission.NoAccess
 	if !userTag.IsLocal() {
 		everyoneTag := names.NewUserTag(common.EveryoneTagName)
-		everyoneGroupUser, err := state.ControllerAccess(a.root.state, everyoneTag)
+		everyoneGroupUser, err := state.ControllerAccess(a.root.state.State(), everyoneTag)
 		if err != nil && !errors.IsNotFound(err) {
 			return nil, errors.Annotatef(err, "obtaining ControllerUser for everyone group")
 		}
@@ -237,7 +242,7 @@ func (a *admin) checkUserPermissions(userTag names.UserTag, controllerOnlyLogin 
 	}
 
 	controllerAccess := permission.NoAccess
-	if controllerUser, err := state.ControllerAccess(a.root.state, userTag); err == nil {
+	if controllerUser, err := state.ControllerAccess(a.root.state.State(), userTag); err == nil {
 		controllerAccess = controllerUser.Access
 	} else if errors.IsNotFound(err) {
 		controllerAccess = everyoneGroupAccess
@@ -251,7 +256,7 @@ func (a *admin) checkUserPermissions(userTag names.UserTag, controllerOnlyLogin 
 		// admin.
 
 		var err error
-		modelAccess, err = a.root.state.UserPermission(userTag, a.root.state.ModelTag())
+		modelAccess, err = a.root.state.State().UserPermission(userTag, a.root.state.State().ModelTag())
 		if err != nil && controllerAccess != permission.SuperuserAccess {
 			return nil, errors.Wrap(err, common.ErrPerm)
 		}
@@ -277,7 +282,7 @@ func (a *admin) checkUserPermissions(userTag names.UserTag, controllerOnlyLogin 
 		logger.Debugf("controller login: user %s has %q access", userTag.Id(), controllerAccess)
 	} else {
 		logger.Debugf("model login: user %s has %q for controller; %q for model %s",
-			userTag.Id(), controllerAccess, modelAccess, a.root.state.ModelTag().Id())
+			userTag.Id(), controllerAccess, modelAccess, a.root.state.State().ModelTag().Id())
 	}
 	return &params.AuthUserInfo{
 		Identity:         userTag.String(),
@@ -298,7 +303,7 @@ func filterFacades(registry *facade.Registry, allowFacade func(name string) bool
 }
 
 func (a *admin) checkCreds(req params.LoginRequest, lookForModelUser bool) (state.Entity, *time.Time, error) {
-	return doCheckCreds(a.root.state, req, lookForModelUser, a.authenticator())
+	return doCheckCreds(a.root.state.State(), req, lookForModelUser, a.authenticator())
 }
 
 func (a *admin) checkControllerMachineCreds(req params.LoginRequest) (state.Entity, error) {

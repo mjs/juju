@@ -44,7 +44,7 @@ type objectKey struct {
 // after it has logged in. It contains an rpc.Root which it
 // uses to dispatch API calls appropriately.
 type apiHandler struct {
-	state     *state.State
+	state     *stateUnion
 	rpcConn   *rpc.Conn
 	resources *common.Resources
 	entity    state.Entity
@@ -63,7 +63,7 @@ type apiHandler struct {
 var _ = (*apiHandler)(nil)
 
 // newAPIHandler returns a new apiHandler.
-func newAPIHandler(srv *Server, st *state.State, rpcConn *rpc.Conn, modelUUID string, serverHost string) (*apiHandler, error) {
+func newAPIHandler(srv *Server, st *stateUnion, rpcConn *rpc.Conn, modelUUID string, serverHost string) (*apiHandler, error) {
 	r := &apiHandler{
 		state:      st,
 		resources:  common.NewResources(),
@@ -131,7 +131,7 @@ func (s *srvCaller) Call(objId string, arg reflect.Value) (reflect.Value, error)
 
 // apiRoot implements basic method dispatching to the facade registry.
 type apiRoot struct {
-	state       *state.State
+	state       *stateUnion
 	pool        *state.StatePool
 	facades     *facade.Registry
 	resources   *common.Resources
@@ -141,7 +141,7 @@ type apiRoot struct {
 }
 
 // newAPIRoot returns a new apiRoot.
-func newAPIRoot(st *state.State, pool *state.StatePool, facades *facade.Registry, resources *common.Resources, authorizer facade.Authorizer) *apiRoot {
+func newAPIRoot(st *stateUnion, pool *state.StatePool, facades *facade.Registry, resources *common.Resources, authorizer facade.Authorizer) *apiRoot {
 	r := &apiRoot{
 		state:       st,
 		pool:        pool,
@@ -289,7 +289,7 @@ func (ctx *facadeContext) Resources() facade.Resources {
 
 // State is part of of the facade.Context interface.
 func (ctx *facadeContext) State() *state.State {
-	return ctx.r.state
+	return ctx.r.state.State()
 }
 
 // StatePool is part of of the facade.Context interface.
@@ -385,12 +385,12 @@ func (r *apiHandler) GetAuthEntity() state.Entity {
 
 // HasPermission returns true if the logged in user can perform <operation> on <target>.
 func (r *apiHandler) HasPermission(operation permission.Access, target names.Tag) (bool, error) {
-	return common.HasPermission(r.state.UserPermission, r.entity.Tag(), operation, target)
+	return common.HasPermission(r.state.State().UserPermission, r.entity.Tag(), operation, target)
 }
 
 // UserHasPermission returns true if the passed in user can perform <operation> on <target>.
 func (r *apiHandler) UserHasPermission(user names.UserTag, operation permission.Access, target names.Tag) (bool, error) {
-	return common.HasPermission(r.state.UserPermission, user, operation, target)
+	return common.HasPermission(r.state.State().UserPermission, user, operation, target)
 }
 
 // DescribeFacades returns the list of available Facades and their Versions
