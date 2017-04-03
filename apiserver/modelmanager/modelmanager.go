@@ -315,7 +315,7 @@ func (m *ModelManagerAPI) CreateModel(args params.ModelCreateArgs) (params.Model
 	}
 	defer st.Close()
 
-	return m.getModelInfo(model.ModelTag())
+	return m.getIAASModelInfo(model.ModelTag())
 }
 
 // CreateCAASModel creates a new CAAS model.
@@ -347,7 +347,7 @@ func (m *ModelManagerAPI) CreateCAASModel(args params.CAASModelCreateArgs) (para
 		return result, errors.Trace(err)
 	}
 
-	_, st, err := m.state.NewCAASModel(state.CAASModelArgs{
+	model, st, err := m.state.NewCAASModel(state.CAASModelArgs{
 		UUID:     modelUUID.String(),
 		Name:     args.Name,
 		Owner:    ownerTag,
@@ -361,14 +361,7 @@ func (m *ModelManagerAPI) CreateCAASModel(args params.CAASModelCreateArgs) (para
 	}
 	defer st.Close()
 
-	return params.CAASModelInfo{
-		Name:           args.Name,
-		UUID:           modelUUID.String(),
-		ControllerUUID: m.state.ControllerUUID(),
-		// XXX type
-		OwnerTag: args.OwnerTag,
-		Life:     params.Alive,
-	}, nil
+	return m.getCAASModelInfo(model.ModelTag())
 }
 
 func (m *ModelManagerAPI) dumpModel(args params.Entity) (map[string]interface{}, error) {
@@ -570,7 +563,8 @@ func (m *ModelManagerAPI) ModelInfo(args params.Entities) (params.ModelInfoResul
 		if err != nil {
 			return params.ModelInfo{}, errors.Trace(err)
 		}
-		return m.getModelInfo(tag)
+		// XXX CAAS
+		return m.getIAASModelInfo(tag)
 	}
 
 	for i, arg := range args.Entities {
@@ -584,7 +578,27 @@ func (m *ModelManagerAPI) ModelInfo(args params.Entities) (params.ModelInfoResul
 	return results, nil
 }
 
-func (m *ModelManagerAPI) getModelInfo(tag names.ModelTag) (params.ModelInfo, error) {
+func (m *ModelManagerAPI) getCAASModelInfo(tag names.ModelTag) (params.CAASModelInfo, error) {
+	model, err := m.state.GetCAASModel(tag)
+	if errors.IsNotFound(err) {
+		return params.CAASModelInfo{}, errors.Trace(common.ErrPerm)
+	} else if err != nil {
+		return params.CAASModelInfo{}, errors.Trace(err)
+	}
+
+	owner := model.Owner()
+
+	return params.CAASModelInfo{
+		Name:           model.Name(),
+		UUID:           model.UUID(),
+		ControllerUUID: m.state.ControllerUUID(),
+		// XXX type
+		OwnerTag: owner.String(),
+		Life:     params.Alive,
+	}, nil
+}
+
+func (m *ModelManagerAPI) getIAASModelInfo(tag names.ModelTag) (params.ModelInfo, error) {
 	st, err := m.state.ForModel(tag)
 	if errors.IsNotFound(err) {
 		return params.ModelInfo{}, errors.Trace(common.ErrPerm)
