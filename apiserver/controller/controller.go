@@ -111,6 +111,7 @@ func (s *ControllerAPI) AllModels() (params.UserModelList, error) {
 			Model: params.Model{
 				Name:     model.Name(),
 				UUID:     model.UUID(),
+				Type:     model.Type(),
 				OwnerTag: model.Owner().String(),
 			},
 			LastConnection: &lastConn,
@@ -128,6 +129,7 @@ func (s *ControllerAPI) AllModels() (params.UserModelList, error) {
 				Model: params.Model{
 					Name:     model.Name(),
 					UUID:     model.UUID(),
+					Type:     model.Type(),
 					OwnerTag: model.Owner().String(),
 				},
 				// No LastConnection as this user hasn't.
