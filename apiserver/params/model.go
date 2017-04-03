@@ -170,7 +170,8 @@ type ModelSLAInfo struct {
 
 // ModelInfoResult holds the result of a ModelInfo call.
 type ModelInfoResult struct {
-	Result *ModelInfo `json:"result,omitempty"`
+	CAASModel *CAASModelInfo `json:"caas-model,omitempty"`
+	IAASModel *ModelInfo `json:"iaas-model,omitempty"`
 	Error  *Error     `json:"error,omitempty"`
 }
 

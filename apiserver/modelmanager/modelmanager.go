@@ -519,6 +519,7 @@ func (m *ModelManagerAPI) ListModels(user params.Entity) (params.UserModelList, 
 			Model: params.Model{
 				Name:     model.Name(),
 				UUID:     model.UUID(),
+				Type:     model.Type(),
 				OwnerTag: model.Owner().String(),
 			},
 			LastConnection: lastConn,
@@ -566,22 +567,31 @@ func (m *ModelManagerAPI) ModelInfo(args params.Entities) (params.ModelInfoResul
 		Results: make([]params.ModelInfoResult, len(args.Entities)),
 	}
 
-	getModelInfo := func(arg params.Entity) (params.ModelInfo, error) {
+	getModelInfo := func(arg params.Entity) (*params.ModelInfo, *params.CAASModelInfo, error) {
 		tag, err := names.ParseModelTag(arg.Tag)
 		if err != nil {
-			return params.ModelInfo{}, errors.Trace(err)
+			return nil, nil, errors.Trace(err)
 		}
-		// XXX CAAS
-		return m.getIAASModelInfo(tag)
+		isCAAS, err := m.state.IsCAASModel(tag.Id())
+		if err != nil {
+			return nil, nil, errors.Trace(err)
+		}
+		if isCAAS {
+			caasModel, err := m.getCAASModelInfo(tag)
+			return nil, &caasModel, err
+		}
+		iaasModel, err := m.getIAASModelInfo(tag)
+		return &iaasModel, nil, err
 	}
 
 	for i, arg := range args.Entities {
-		modelInfo, err := getModelInfo(arg)
+		iaasModelInfo, caasModelInfo, err := getModelInfo(arg)
 		if err != nil {
 			results.Results[i].Error = common.ServerError(err)
 			continue
 		}
-		results.Results[i].Result = &modelInfo
+		results.Results[i].CAASModel = caasModelInfo
+		results.Results[i].IAASModel = iaasModelInfo
 	}
 	return results, nil
 }

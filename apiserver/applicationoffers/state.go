@@ -193,6 +193,19 @@ type modelShim struct {
 	*state.Model
 }
 
+type UserModel interface {
+	Model() Model
+}
+
+type userModelShim struct {
+	*state.UserModel
+}
+
+func (um *userModelShim) Model() Model {
+	// XXX CAAS
+	return &modelShim{um.UserModel.IAASModel()}
+}
+
 func (s *stateShim) RemoteConnectionStatus(offerName string) (RemoteConnectionStatus, error) {
 	status, err := s.State.RemoteConnectionStatus(offerName)
 	return &remoteConnectionStatusShim{status}, err
