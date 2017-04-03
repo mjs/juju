@@ -686,6 +686,39 @@ func (srv *Server) serveConn(wsConn *websocket.Conn, modelUUID string, apiObserv
 	codec := jsoncodec.NewWebsocket(wsConn)
 	conn := rpc.NewConn(codec, apiObserver)
 
+	stUnion, releaser, err := srv.getState(modelUUID)
+	if err != nil {
+		return srv.serveErrRoot(conn, err)
+	}
+	defer releaser()
+	h, err := newAPIHandler(srv, stUnion, conn, modelUUID, host)
+	if err != nil {
+		return srv.serveErrRoot(conn, err)
+	}
+
+	adminAPIs := make(map[int]interface{})
+	for apiVersion, factory := range srv.adminAPIFactories {
+		adminAPIs[apiVersion] = factory(srv, h, apiObserver)
+	}
+	conn.ServeRoot(newAnonRoot(h, adminAPIs), serverError)
+	return srv.startConnAndWait(conn)
+}
+
+func (srv *Server) serveErrRoot(conn *rpc.Conn, err error) error {
+	conn.ServeRoot(&errRoot{errors.Trace(err)}, serverError)
+	return srv.startConnAndWait(conn)
+}
+
+func (srv *Server) startConnAndWait(conn *rpc.Conn) error {
+	conn.Start()
+	select {
+	case <-conn.Dead():
+	case <-srv.tomb.Dying():
+	}
+	return conn.Close()
+}
+
+func (srv *Server) getState(modelUUID string) (*stateUnion, func(), error) {
 	// Note that we don't overwrite modelUUID here because
 	// newAPIHandler treats an empty modelUUID as signifying
 	// the API version used.
@@ -693,38 +726,19 @@ func (srv *Server) serveConn(wsConn *websocket.Conn, modelUUID string, apiObserv
 		statePool: srv.statePool,
 		modelUUID: modelUUID,
 	})
-	if isCAAS {
-		panic("not done yet")
-	}
-	var (
-		st       *state.State
-		h        *apiHandler
-		releaser func()
-	)
-	if err == nil {
-		st, releaser, err = srv.statePool.Get(resolvedModelUUID)
-	}
-
-	if err == nil {
-		defer releaser()
-		h, err = newAPIHandler(srv, st, conn, modelUUID, host)
-	}
-
 	if err != nil {
-		conn.ServeRoot(&errRoot{errors.Trace(err)}, serverError)
+		return nil, nil, errors.Trace(err)
+	}
+
+	if isCAAS {
+		panic("not done")
 	} else {
-		adminAPIs := make(map[int]interface{})
-		for apiVersion, factory := range srv.adminAPIFactories {
-			adminAPIs[apiVersion] = factory(srv, h, apiObserver)
+		st, releaser, err := srv.statePool.Get(resolvedModelUUID)
+		if err != nil {
+			return nil, nil, errors.Trace(err)
 		}
-		conn.ServeRoot(newAnonRoot(h, adminAPIs), serverError)
+		return newStateUnion(st), releaser, nil
 	}
-	conn.Start()
-	select {
-	case <-conn.Dead():
-	case <-srv.tomb.Dying():
-	}
-	return conn.Close()
 }
 
 func (srv *Server) mongoPinger() error {
