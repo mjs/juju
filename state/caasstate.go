@@ -101,14 +101,18 @@ func (st *CAASState) ModelUUID() string {
 }
 
 func (st *CAASState) CAASModel() (*CAASModel, error) {
-       models, closer := st.database.GetCollection(caasModelsC)
-       defer closer()
+	models, closer := st.database.GetCollection(caasModelsC)
+	defer closer()
 
-       model := &CAASModel{st: st}
-       if err := model.refresh(models.FindId(st.ModelUUID())); err != nil {
-               return nil, errors.Trace(err)
-       }
-       return model, nil
+	model := &CAASModel{st: st}
+	if err := model.refresh(models.FindId(st.ModelUUID())); err != nil {
+		return nil, errors.Trace(err)
+	}
+	return model, nil
+}
+
+func (st *CAASState) ModelTag() names.ModelTag {
+	return st.modelTag
 }
 
 func (st *CAASState) Close() error {
