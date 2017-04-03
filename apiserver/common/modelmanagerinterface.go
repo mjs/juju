@@ -37,7 +37,9 @@ type ModelManagerBackend interface {
 	ControllerModel() (Model, error)
 	ControllerConfig() (controller.Config, error)
 	ForModel(tag names.ModelTag) (ModelManagerBackend, error)
+	GetCAASModel(tag names.ModelTag) (CAASModel, error)
 	GetModel(names.ModelTag) (Model, error)
+	IsCAASModel(uuid string) (bool, error)
 	Model() (Model, error)
 	ModelConfigDefaultValues() (config.ModelDefaultAttributes, error)
 	UpdateModelConfigDefaultValues(update map[string]interface{}, remove []string, regionSpec *environs.RegionSpec) error
@@ -72,6 +74,9 @@ type ModelManagerBackend interface {
 
 // XXX
 type CAASModelBackend interface {
+	CAASModel() (CAASModel, error)
+	ControllerUUID() string
+	ModelUUID() string
 	Close() error
 }
 
@@ -95,12 +100,22 @@ type Model interface {
 }
 
 type CAASModel interface {
+	Name() string
+	UUID() string
+	ModelTag() names.ModelTag
+	Owner() names.UserTag
 }
 
 var _ ModelManagerBackend = (*modelManagerStateShim)(nil)
 
 type modelManagerStateShim struct {
 	*state.State
+}
+
+var _ CAASModelBackend = (*caasModelBackendShim)(nil)
+
+type caasModelBackendShim struct {
+	*state.CAASState
 }
 
 // NewModelManagerBackend returns a modelManagerStateShim wrapping the passed
@@ -133,7 +148,7 @@ func (st modelManagerStateShim) NewCAASModel(args state.CAASModelArgs) (CAASMode
 	if err != nil {
 		return nil, nil, err
 	}
-	return m, otherState, nil
+	return caasModelShim{m}, caasModelBackendShim{otherState}, nil
 }
 
 // ForModel implements ModelManagerBackend.
@@ -143,6 +158,15 @@ func (st modelManagerStateShim) ForModel(tag names.ModelTag) (ModelManagerBacken
 		return nil, err
 	}
 	return modelManagerStateShim{otherState}, nil
+}
+
+// GetCAASModel implements ModelManagerBackend.
+func (st modelManagerStateShim) GetCAASModel(tag names.ModelTag) (CAASModel, error) {
+	m, err := st.State.GetCAASModel(tag)
+	if err != nil {
+		return nil, err
+	}
+	return caasModelShim{m}, nil
 }
 
 // GetModel implements ModelManagerBackend.
@@ -226,4 +250,16 @@ func (st modelManagerStateShim) AllApplications() ([]Application, error) {
 		all[i] = applicationShim{a}
 	}
 	return all, nil
+}
+
+type caasModelShim struct {
+	*state.CAASModel
+}
+
+func (st caasModelBackendShim) CAASModel() (CAASModel, error) {
+	m, err := st.CAASState.CAASModel()
+	if err != nil {
+		return nil, err
+	}
+	return caasModelShim{m}, nil
 }
