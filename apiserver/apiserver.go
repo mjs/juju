@@ -736,7 +736,11 @@ func (srv *Server) getState(modelUUID string) (*stateUnion, func(), error) {
 	}
 
 	if isCAAS {
-		panic("not done")
+		st, releaser, err := srv.caasStatePool.Get(resolvedModelUUID)
+		if err != nil {
+			return nil, nil, errors.Trace(err)
+		}
+		return newCAASStateUnion(st), releaser, nil
 	} else {
 		st, releaser, err := srv.statePool.Get(resolvedModelUUID)
 		if err != nil {
