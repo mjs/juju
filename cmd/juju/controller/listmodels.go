@@ -114,7 +114,7 @@ func (c *modelsCommand) SetFlags(f *gnuflag.FlagSet) {
 // ModelSet contains the set of models known to the client,
 // and UUID of the current model.
 type ModelSet struct {
-	IAASModels []common.ModelInfo `yaml:"models" json:"models"`
+	IAASModels []common.ModelInfo     `yaml:"models" json:"models"`
 	CAASModels []common.CAASModelInfo `yaml:"caas-models" json:"caas-models"`
 
 	// CurrentModel is the name of the current model, qualified for the
