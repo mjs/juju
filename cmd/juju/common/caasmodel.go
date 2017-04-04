@@ -14,11 +14,11 @@ import (
 
 // CAASModelInfo contains information about a CAAS model.
 type CAASModelInfo struct {
-	Name           string                      `json:"name" yaml:"name"`
-	UUID           string                      `json:"model-uuid" yaml:"model-uuid"`
-	ControllerUUID string                      `json:"controller-uuid" yaml:"controller-uuid"`
-	ControllerName string                      `json:"controller-name" yaml:"controller-name"`
-	Owner          string                      `json:"owner" yaml:"owner"`
+	Name           string `json:"name" yaml:"name"`
+	UUID           string `json:"model-uuid" yaml:"model-uuid"`
+	ControllerUUID string `json:"controller-uuid" yaml:"controller-uuid"`
+	ControllerName string `json:"controller-name" yaml:"controller-name"`
+	Owner          string `json:"owner" yaml:"owner"`
 }
 
 // CAASModelInfoFromParams translates a params.CAASModelInfo to CAASModelInfo.
