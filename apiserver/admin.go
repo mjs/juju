@@ -65,15 +65,13 @@ func (a *admin) login(req params.LoginRequest, loginVersion int) (params.LoginRe
 
 	if a.root.state.IsCAAS() {
 		// XXX don't bother with actual login checks here. Just fake it for the prototype for now.
+		apiRoot = restrictRoot(apiRoot, caasModelFacadesOnly)
 		a.root.rpcConn.ServeRoot(apiRoot, serverError)
-
-		// XXX filter so that only CAAS model facades are returned
-		facades := DescribeFacades(a.srv.facades)
 		return params.LoginResult{
 			ModelTag:      a.root.state.CAASState().ModelTag().String(),
 			ControllerTag: a.srv.state.ControllerTag().String(),
 			ServerVersion: jujuversion.Current.String(),
-			Facades:       facades,
+			Facades:       filterFacades(a.srv.facades, isCAASModelFacade),
 		}, nil
 	}
 

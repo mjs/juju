@@ -19,5 +19,5 @@ func modelFacadesOnly(facadeName, _ string) error {
 // IsModelFacade reports whether the given facade name can be accessed
 // using a model connection.
 func IsModelFacade(facadeName string) bool {
-	return !controllerFacadeNames.Contains(facadeName)
+	return !controllerFacadeNames.Contains(facadeName) && !caasModelFacadeNames.Contains(facadeName)
 }
