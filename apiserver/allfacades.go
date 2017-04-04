@@ -20,6 +20,7 @@ import (
 	"github.com/juju/juju/apiserver/backups" // ModelUser Write
 	"github.com/juju/juju/apiserver/block"   // ModelUser Write
 	"github.com/juju/juju/apiserver/bundle"
+	"github.com/juju/juju/apiserver/caasapplication"
 	"github.com/juju/juju/apiserver/charmrevisionupdater"
 	"github.com/juju/juju/apiserver/charms" // ModelUser Write
 	"github.com/juju/juju/apiserver/cleaner"
@@ -213,6 +214,9 @@ func AllFacades() *facade.Registry {
 		reg("RemoteFirewaller", 1, remotefirewaller.NewStateRemoteFirewallerAPI)
 		reg("RemoteRelations", 1, remoterelations.NewStateRemoteRelationsAPI)
 	}
+
+	// XXX CAAS prototype facades
+	reg("CAASApplication", 1, caasapplication.NewFacade)
 
 	regRaw("AllWatcher", 1, NewAllWatcher, reflect.TypeOf((*SrvAllWatcher)(nil)))
 	// Note: AllModelWatcher uses the same infrastructure as AllWatcher
