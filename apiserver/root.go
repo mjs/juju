@@ -292,6 +292,11 @@ func (ctx *facadeContext) State() *state.State {
 	return ctx.r.state.State()
 }
 
+// CAASState is part of of the facade.Context interface.
+func (ctx *facadeContext) CAASState() *state.CAASState {
+	return ctx.r.state.CAASState()
+}
+
 // StatePool is part of of the facade.Context interface.
 func (ctx *facadeContext) StatePool() *state.StatePool {
 	return ctx.r.pool

@@ -57,10 +57,14 @@ type Context interface {
 	// necessarily a great idea.
 	Resources() Resources
 
+	// XXX for a given model either State() or CAASState() will return nil
+
 	// State returns, /sigh, a *State. As yet, there is no way
 	// around this; in the not-too-distant future, we hope, its
 	// capabilities will migrate towards access via Resources.
 	State() *state.State
+
+	CAASState() *state.CAASState
 
 	// StatePool returns the state pool used by the apiserver to minimise the
 	// creation of the expensive *State instances.
