@@ -159,8 +159,8 @@ type ModelInfo struct {
 // ModelInfoResult holds the result of a ModelInfo call.
 type ModelInfoResult struct {
 	CAASModel *CAASModelInfo `json:"caas-model,omitempty"`
-	IAASModel *ModelInfo `json:"iaas-model,omitempty"`
-	Error  *Error     `json:"error,omitempty"`
+	IAASModel *ModelInfo     `json:"iaas-model,omitempty"`
+	Error     *Error         `json:"error,omitempty"`
 }
 
 // ModelInfoResult holds the result of a bulk ModelInfo call.

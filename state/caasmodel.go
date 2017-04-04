@@ -125,25 +125,25 @@ func (st *State) GetCAASModel(tag names.ModelTag) (*CAASModel, error) {
 
 // AllCAASModels returns all the CAAS models in the system.
 func (st *State) AllCAASModels() ([]*CAASModel, error) {
-        models, closer := st.getCollection(caasModelsC)
-        defer closer()
+	models, closer := st.getCollection(caasModelsC)
+	defer closer()
 
-        var caasModelDocs []caasModelDoc
-        err := models.Find(nil).Sort("name", "owner").All(&caasModelDocs)
-        if err != nil {
-                return nil, err
-        }
+	var caasModelDocs []caasModelDoc
+	err := models.Find(nil).Sort("name", "owner").All(&caasModelDocs)
+	if err != nil {
+		return nil, err
+	}
 
-        result := make([]*CAASModel, len(caasModelDocs))
-        for i, doc := range caasModelDocs {
+	result := make([]*CAASModel, len(caasModelDocs))
+	for i, doc := range caasModelDocs {
 		caasSt, err := st.ForCAASModel(names.NewModelTag(doc.UUID))
 		if err != nil {
 			return nil, errors.Annotate(err, "could not create state for caas model")
 		}
-                result[i] = &CAASModel{st: caasSt, doc: doc}
-        }
+		result[i] = &CAASModel{st: caasSt, doc: doc}
+	}
 
-        return result, nil
+	return result, nil
 }
 
 func (st *State) IsCAASModel(uuid string) (bool, error) {
