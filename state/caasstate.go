@@ -5,8 +5,6 @@ package state
 
 import (
 	"github.com/juju/errors"
-	"github.com/juju/juju/state/storage"
-	"github.com/juju/juju/state/watcher"
 	"github.com/juju/utils"
 	"github.com/juju/utils/clock"
 	"gopkg.in/juju/charm.v6-unstable"
@@ -14,6 +12,9 @@ import (
 	"gopkg.in/juju/names.v2"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/txn"
+
+	"github.com/juju/juju/state/storage"
+	"github.com/juju/juju/state/watcher"
 )
 
 type CAASState struct {
