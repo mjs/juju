@@ -2724,6 +2724,11 @@ func (st *State) WatchSubnets(subnetFilter func(id interface{}) bool) StringsWat
 	return newLifecycleWatcher(st, subnetsC, nil, filter, nil)
 }
 
+// XXX
+func (st *CAASState) WatchApplications() StringsWatcher {
+	return newLifecycleWatcher(st, caasApplicationsC, nil, isLocalID(st), nil)
+}
+
 // isLocalID returns a watcher filter func that rejects ids not specific
 // to the supplied modelBackend.
 func isLocalID(st modelBackend) func(interface{}) bool {
