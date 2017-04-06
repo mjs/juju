@@ -10,6 +10,7 @@ import (
 	"gopkg.in/juju/charm.v6-unstable"
 	csparams "gopkg.in/juju/charmrepo.v2-unstable/csclient/params"
 	"gopkg.in/juju/names.v2"
+	"gopkg.in/juju/worker.v1"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/txn"
 
@@ -22,6 +23,7 @@ type CAASState struct {
 	controllerTag names.ControllerTag
 	session       *mgo.Session
 	database      Database
+	workers       *caasWorkers
 	clock         clock.Clock
 }
 
@@ -66,7 +68,11 @@ func (st *CAASState) newStorage() storage.Storage {
 }
 
 func (st *CAASState) start() error {
-	// XXX workers
+	ws, err := newCAASWorkers(st)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	st.workers = ws
 	return nil
 }
 
@@ -117,7 +123,11 @@ func (st *CAASState) ModelTag() names.ModelTag {
 }
 
 func (st *CAASState) Close() error {
-	// XXX child worker shutdown here
+	if st.workers != nil {
+		if err := worker.Stop(st.workers); err != nil {
+			return errors.Annotatef(err, "failed to stop workers")
+		}
+	}
 	st.session.Close()
 	return nil
 }
