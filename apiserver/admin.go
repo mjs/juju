@@ -65,6 +65,12 @@ func (a *admin) login(req params.LoginRequest, loginVersion int) (params.LoginRe
 
 	if a.root.state.IsCAAS() {
 		// XXX don't bother with actual login checks here. Just fake it for the prototype for now.
+		u, err := a.srv.state.User(names.NewUserTag("admin"))
+		if err != nil {
+			return fail, err
+		}
+		a.root.entity = u
+
 		apiRoot = restrictRoot(apiRoot, caasModelFacadesOnly)
 		a.root.rpcConn.ServeRoot(apiRoot, serverError)
 		return params.LoginResult{
