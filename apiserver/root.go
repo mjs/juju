@@ -287,6 +287,18 @@ func (ctx *facadeContext) Resources() facade.Resources {
 	return ctx.r.resources
 }
 
+// IsCAAS returns whether the facade.Context interface has
+// an associated CAAS state.
+func (ctx *facadeContext) IsCAAS() bool {
+	return ctx.r.state.IsCAAS()
+}
+
+// IsIAAS returns whether the facade.Context interface has
+// an associated IAAS state.
+func (ctx *facadeContext) IsIAAS() bool {
+	return ctx.r.state.IsIAAS()
+}
+
 // State is part of of the facade.Context interface.
 func (ctx *facadeContext) State() *state.State {
 	return ctx.r.state.State()

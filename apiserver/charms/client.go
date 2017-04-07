@@ -8,6 +8,7 @@ import (
 	"github.com/juju/utils/set"
 	"gopkg.in/juju/charm.v6-unstable"
 	"gopkg.in/juju/charm.v6-unstable/resource"
+	names "gopkg.in/juju/names.v2"
 
 	"github.com/juju/juju/apiserver/common"
 	"github.com/juju/juju/apiserver/facade"
@@ -16,15 +17,17 @@ import (
 	"github.com/juju/juju/state"
 )
 
-var getState = func(st *state.State) charmsAccess {
-	return stateShim{st}
-}
-
 // Charms defines the methods on the charms API end point.
 type Charms interface {
 	List(args params.CharmsList) (params.CharmsListResult, error)
 	CharmInfo(args params.CharmURL) (params.CharmInfo, error)
 	IsMetered(args params.CharmURL) (bool, error)
+}
+
+type charmsAccess interface {
+	Charm(curl *charm.URL) (*state.Charm, error)
+	AllCharms() ([]*state.Charm, error)
+	ModelTag() names.ModelTag
 }
 
 // API implements the charms interface and is the concrete
@@ -45,19 +48,22 @@ func (a *API) checkCanRead() error {
 	return nil
 }
 
-// NewAPI returns a new charms API facade.
-func NewAPI(
-	st *state.State,
-	resources facade.Resources,
-	authorizer facade.Authorizer,
-) (*API, error) {
+// NewFacade provides the signature required for facade registration.
+func NewFacade(ctx facade.Context) (*API, error) {
+	var st charmsAccess
+	if ctx.IsCAAS() {
+		st = ctx.CAASState()
+	} else {
+		st = ctx.State()
+	}
 
+	authorizer := ctx.Auth()
 	if !authorizer.AuthClient() {
 		return nil, common.ErrPerm
 	}
 
 	return &API{
-		access:     getState(st),
+		access:     st,
 		authorizer: authorizer,
 	}, nil
 }

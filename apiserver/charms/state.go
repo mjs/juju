@@ -10,12 +10,6 @@ import (
 	"github.com/juju/juju/state"
 )
 
-type charmsAccess interface {
-	Charm(curl *charm.URL) (*state.Charm, error)
-	AllCharms() ([]*state.Charm, error)
-	ModelTag() names.ModelTag
-}
-
 type stateShim struct {
 	state *state.State
 }
