@@ -81,6 +81,7 @@ import (
 	jworker "github.com/juju/juju/worker"
 	"github.com/juju/juju/worker/apicaller"
 	"github.com/juju/juju/worker/caasmodelworkermanager"
+	"github.com/juju/juju/worker/caasprovisioner"
 	"github.com/juju/juju/worker/certupdater"
 	"github.com/juju/juju/worker/conv2state"
 	"github.com/juju/juju/worker/dblogpruner"
@@ -1004,19 +1005,6 @@ func (a *MachineAgent) startStateWorkers(
 				}
 				return w, nil
 			})
-			a.startWorkerAfterUpgrade(runner, "CAAS model worker manager", func() (worker.Worker, error) {
-				w, err := caasmodelworkermanager.New(caasmodelworkermanager.Config{
-					ControllerUUID: st.ControllerUUID(),
-					Backend:        st,
-					NewWorker:      a.startCAASModelWorkers,
-					ErrorDelay:     jworker.RestartDelay,
-				})
-				if err != nil {
-					return nil, errors.Annotate(err, "cannot start CAAS model worker manager")
-				}
-				return w, nil
-			})
-
 			a.startWorkerAfterUpgrade(runner, "peergrouper", func() (worker.Worker, error) {
 				env, err := stateenvirons.GetNewEnvironFunc(environs.New)(st)
 				if err != nil {
@@ -1097,6 +1085,22 @@ func (a *MachineAgent) startStateWorkers(
 			a.startWorkerAfterUpgrade(singularRunner, "txnpruner", func() (worker.Worker, error) {
 				return txnpruner.New(st, time.Hour*2, clock.WallClock), nil
 			})
+
+			// XXX note that we're only running this on the primary
+			// controller for the prototype (singularRunner)
+			a.startWorkerAfterUpgrade(singularRunner, "CAAS model worker manager", func() (worker.Worker, error) {
+				w, err := caasmodelworkermanager.New(caasmodelworkermanager.Config{
+					ControllerUUID: st.ControllerUUID(),
+					Backend:        st,
+					NewWorker:      a.startCAASModelWorkers,
+					ErrorDelay:     jworker.RestartDelay,
+				})
+				if err != nil {
+					return nil, errors.Annotate(err, "cannot start CAAS model worker manager")
+				}
+				return w, nil
+			})
+
 		default:
 			return nil, errors.Errorf("unknown job type %q", job)
 		}
@@ -1154,24 +1158,10 @@ func (a *MachineAgent) startCAASModelWorkers(
 	newState caasmodelworkermanager.NewStateFunc,
 ) (worker.Worker, error) {
 	logger.Infof("starting CAAS workers for %s", modelUUID)
-	// XXX need a dependency engine here and a lifeflag to tear things
-	// down when the model goes away
 
-	// XXX this needs to start something useful
-	return new(dummyWorker), nil
-}
-
-// XXX
-type dummyWorker struct {
-	tomb tomb.Tomb
-}
-
-func (dw *dummyWorker) Kill() {
-	dw.tomb.Kill(nil)
-}
-
-func (dw *dummyWorker) Wait() error {
-	return dw.tomb.Wait()
+	// XXX eventually we'll need a full dependency engine here (with
+	// upgrade handling, a life flag etc), but this will do for now.
+	return caasprovisioner.New(newState)
 }
 
 // stateWorkerDialOpts is a mongo.DialOpts suitable
