@@ -21,6 +21,10 @@ type sequenceDoc struct {
 // sequence safely increments a database backed sequence, returning
 // the next value.
 func (st *State) sequence(name string) (int, error) {
+	return sequence(st, name)
+}
+
+func sequence(st modelBackend, name string) (int, error) {
 	sequences, closer := st.db().GetCollection(sequenceC)
 	defer closer()
 	query := sequences.FindId(name)
@@ -28,7 +32,7 @@ func (st *State) sequence(name string) (int, error) {
 		Update: bson.M{
 			"$set": bson.M{
 				"name":       name,
-				"model-uuid": st.ModelUUID(),
+				"model-uuid": st.uuid(),
 			},
 			"$inc": bson.M{"counter": 1},
 		},
