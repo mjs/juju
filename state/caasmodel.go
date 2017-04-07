@@ -109,7 +109,7 @@ func (st *State) CAASModel() (*CAASModel, error) {
 
 // GetCAASModel looks for the CAAS model identified by the uuid passed in.
 func (st *State) GetCAASModel(tag names.ModelTag) (*CAASModel, error) {
-	models, closer := st.getCollection(caasModelsC)
+	models, closer := st.db().GetCollection(caasModelsC)
 	defer closer()
 
 	caasSt, err := st.ForCAASModel(tag)
@@ -125,7 +125,7 @@ func (st *State) GetCAASModel(tag names.ModelTag) (*CAASModel, error) {
 
 // AllCAASModels returns all the CAAS models in the system.
 func (st *State) AllCAASModels() ([]*CAASModel, error) {
-	models, closer := st.getCollection(caasModelsC)
+	models, closer := st.db().GetCollection(caasModelsC)
 	defer closer()
 
 	var caasModelDocs []caasModelDoc
