@@ -1154,7 +1154,10 @@ func (a *MachineAgent) startModelWorkers(controllerUUID, modelUUID string) (work
 	return engine, nil
 }
 
-func (a *MachineAgent) startCAASModelWorkers(controllerUUID, modelUUID string) (worker.Worker, error) {
+func (a *MachineAgent) startCAASModelWorkers(
+	modelUUID string,
+	newState caasmodelworkermanager.NewStateFunc,
+) (worker.Worker, error) {
 	logger.Infof("starting CAAS workers for %s", modelUUID)
 	// XXX need a dependency engine here and a lifeflag to tear things
 	// down when the model goes away
