@@ -125,7 +125,7 @@ func insertCharmOps(st *State, info CharmInfo) ([]txn.Op, error) {
 // insertPlaceholderCharmOps returns the txn operations necessary to insert a
 // charm document referencing a store charm that is not yet directly accessible
 // within the model. If curl is nil, an error will be returned.
-func insertPlaceholderCharmOps(st *State, curl *charm.URL) ([]txn.Op, error) {
+func insertPlaceholderCharmOps(st modelBackend, curl *charm.URL) ([]txn.Op, error) {
 	if curl == nil {
 		return nil, errors.New("*charm.URL was nil")
 	}
@@ -139,7 +139,7 @@ func insertPlaceholderCharmOps(st *State, curl *charm.URL) ([]txn.Op, error) {
 // insertPendingCharmOps returns the txn operations necessary to insert a charm
 // document referencing a charm that has yet to be uploaded to the model.
 // If curl is nil, an error will be returned.
-func insertPendingCharmOps(st *State, curl *charm.URL) ([]txn.Op, error) {
+func insertPendingCharmOps(st modelBackend, curl *charm.URL) ([]txn.Op, error) {
 	if curl == nil {
 		return nil, errors.New("*charm.URL was nil")
 	}
@@ -190,10 +190,7 @@ func insertAnyCharmOps(st modelBackend, cdoc *charmDoc) ([]txn.Op, error) {
 // updateCharmOps returns the txn operations necessary to update the charm
 // document with the supplied data, so long as the supplied assert still holds
 // true.
-func updateCharmOps(
-	st modelBackend, info CharmInfo, assert bson.D,
-) ([]txn.Op, error) {
-
+func updateCharmOps(st modelBackend, info CharmInfo, assert bson.D) ([]txn.Op, error) {
 	charms, closer := st.db().GetCollection(charmsC)
 	defer closer()
 
@@ -569,7 +566,11 @@ func validateCharmVersion(ch hasMeta) error {
 
 // AllCharms returns all charms in state.
 func (st *State) AllCharms() ([]*Charm, error) {
-	charmsCollection, closer := st.getCollection(charmsC)
+	return allCharms(st)
+}
+
+func allCharms(st modelBackend) ([]*Charm, error) {
+	charmsCollection, closer := st.db().GetCollection(charmsC)
 	defer closer()
 	var cdoc charmDoc
 	var charms []*Charm
@@ -637,13 +638,13 @@ func (st *State) LatestPlaceholderCharm(curl *charm.URL) (*Charm, error) {
 	return newCharm(st, &latest), nil
 }
 
-// PrepareLocalCharmUpload must be called before a local charm is
+// prepareLocalCharmUpload must be called before a local charm is
 // uploaded to the provider storage in order to create a charm
 // document in state. It returns the chosen unique charm URL reserved
 // in state for the charm.
 //
 // The url's schema must be "local" and it must include a revision.
-func (st *State) PrepareLocalCharmUpload(curl *charm.URL) (chosenURL *charm.URL, err error) {
+func prepareLocalCharmUpload(st modelBackend, curl *charm.URL) (chosenURL *charm.URL, err error) {
 	// Perform a few sanity checks first.
 	if curl.Schema != "local" {
 		return nil, errors.Errorf("expected charm URL with local schema, got %q", curl)
@@ -653,7 +654,7 @@ func (st *State) PrepareLocalCharmUpload(curl *charm.URL) (chosenURL *charm.URL,
 	}
 
 	revisionSeq := charmRevSeqName(curl.WithRevision(-1).String())
-	revision, err := st.sequenceWithMin(revisionSeq, curl.Revision)
+	revision, err := sequenceWithMin(st, revisionSeq, curl.Revision)
 	if err != nil {
 		return nil, errors.Annotate(err, "unable to allocate charm revision")
 	}
@@ -664,10 +665,14 @@ func (st *State) PrepareLocalCharmUpload(curl *charm.URL) (chosenURL *charm.URL,
 		return nil, errors.Trace(err)
 	}
 
-	if err := st.runTransaction(ops); err != nil {
+	if err := st.db().RunTransaction(ops); err != nil {
 		return nil, errors.Trace(err)
 	}
 	return allocatedURL, nil
+}
+
+func (st *State) PrepareLocalCharmUpload(curl *charm.URL) (chosenURL *charm.URL, err error) {
+	return prepareLocalCharmUpload(st, curl)
 }
 
 const charmRevSeqPrefix = "charmrev-"
@@ -680,7 +685,7 @@ func isCharmRevSeqName(name string) bool {
 	return strings.HasPrefix(name, charmRevSeqPrefix)
 }
 
-// PrepareStoreCharmUpload must be called before a charm store charm
+// prepareStoreCharmUpload must be called before a charm store charm
 // is uploaded to the provider storage in order to create a charm
 // document in state. If a charm with the same URL is already in
 // state, it will be returned as a *state.Charm (it can be still
@@ -689,7 +694,7 @@ func isCharmRevSeqName(name string) bool {
 // PendingUpload=true, which is then returned as a *state.Charm.
 //
 // The url's schema must be "cs" and it must include a revision.
-func (st *State) PrepareStoreCharmUpload(curl *charm.URL) (*Charm, error) {
+func prepareStoreCharmUpload(st modelBackend, curl *charm.URL) (*Charm, error) {
 	// Perform a few sanity checks first.
 	if curl.Schema != "cs" {
 		return nil, errors.Errorf("expected charm URL with cs schema, got %q", curl)
@@ -698,7 +703,7 @@ func (st *State) PrepareStoreCharmUpload(curl *charm.URL) (*Charm, error) {
 		return nil, errors.Errorf("expected charm URL with revision, got %q", curl)
 	}
 
-	charms, closer := st.getCollection(charmsC)
+	charms, closer := st.db().GetCollection(charmsC)
 	defer closer()
 
 	var (
@@ -730,10 +735,14 @@ func (st *State) PrepareStoreCharmUpload(curl *charm.URL) (*Charm, error) {
 			return nil, jujutxn.ErrNoOperations
 		}
 	}
-	if err = st.run(buildTxn); err == nil {
+	if err = st.db().Run(buildTxn); err == nil {
 		return newCharm(st, &uploadedCharm), nil
 	}
 	return nil, errors.Trace(err)
+}
+
+func (st *State) PrepareStoreCharmUpload(curl *charm.URL) (*Charm, error) {
+	return prepareStoreCharmUpload(st, curl)
 }
 
 var (
@@ -784,7 +793,11 @@ func (st *State) AddStoreCharmPlaceholder(curl *charm.URL) (err error) {
 // UpdateUploadedCharm marks the given charm URL as uploaded and
 // updates the rest of its data, returning it as *state.Charm.
 func (st *State) UpdateUploadedCharm(info CharmInfo) (*Charm, error) {
-	charms, closer := st.getCollection(charmsC)
+	return updateUploadedCharm(st, info)
+}
+
+func updateUploadedCharm(st modelBackend, info CharmInfo) (*Charm, error) {
+	charms, closer := st.db().GetCollection(charmsC)
 	defer closer()
 
 	doc := &charmDoc{}
@@ -803,8 +816,8 @@ func (st *State) UpdateUploadedCharm(info CharmInfo) (*Charm, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	if err := st.runTransaction(ops); err != nil {
+	if err := st.db().RunTransaction(ops); err != nil {
 		return nil, onAbort(err, ErrCharmRevisionAlreadyModified)
 	}
-	return st.Charm(info.ID)
+	return loadCharm(st, info.ID)
 }

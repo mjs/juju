@@ -13,23 +13,39 @@ import (
 // modelBackend collects together some useful internal state methods for
 // accessing mongo and mapping local and global ids to one another.
 type modelBackend interface {
+	// uuid returns the UUID for the model.
+	uuid() string
+
+	// docID generates a globally unique ID value where the model
+	// UUID is prefixed to the localID.
 	docID(string) string
+
+	// localID returns the local ID value by stripping
+	// off the model UUID prefix if it is there.
 	localID(string) string
+
+	// strictLocalID returns the local id value by removing the
+	// model UUID prefix.
+	//
+	// If there is no prefix matching the State's model, an error is
+	// returned.
 	strictLocalID(string) (string, error)
+
 	db() Database
+
 	txnLogWatcher() *watcher.Watcher
+
 	newStorage() storage.Storage
 }
 
-// docID generates a globally unique id value
-// where the model uuid is prefixed to the
-// localID.
+func (st *State) uuid() string {
+	return st.ModelUUID()
+}
+
 func (st *State) docID(localID string) string {
 	return ensureModelUUID(st.ModelUUID(), localID)
 }
 
-// localID returns the local id value by stripping
-// off the model uuid prefix if it is there.
 func (st *State) localID(ID string) string {
 	modelUUID, localID, ok := splitDocID(ID)
 	if !ok || modelUUID != st.ModelUUID() {
@@ -38,11 +54,6 @@ func (st *State) localID(ID string) string {
 	return localID
 }
 
-// strictLocalID returns the local id value by removing the
-// model UUID prefix.
-//
-// If there is no prefix matching the State's model, an error is
-// returned.
 func (st *State) strictLocalID(ID string) (string, error) {
 	modelUUID, localID, ok := splitDocID(ID)
 	if !ok || modelUUID != st.ModelUUID() {
