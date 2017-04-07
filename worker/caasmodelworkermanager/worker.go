@@ -8,6 +8,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/juju/loggo"
+	"gopkg.in/juju/names.v2"
 	"gopkg.in/juju/worker.v1"
 
 	"github.com/juju/juju/state"
@@ -19,12 +20,15 @@ var logger = loggo.GetLogger("juju.workers.caasmodelworkermanager")
 // Backend defines the State functionality used by the manager worker.
 type Backend interface {
 	WatchCAASModels() state.StringsWatcher
+	ForCAASModel(modelTag names.ModelTag) (*state.CAASState, error)
 }
+
+type NewStateFunc func() (*state.CAASState, error)
 
 // NewWorkerFunc should return a worker responsible for running
 // all a model's required workers; and for returning nil when
 // there's no more model to manage.
-type NewWorkerFunc func(controllerUUID, modelUUID string) (worker.Worker, error)
+type NewWorkerFunc func(string, NewStateFunc) (worker.Worker, error)
 
 // Config holds the dependencies and configuration necessary to run
 // a model worker manager.
@@ -110,7 +114,7 @@ func (m *caasModelWorkerManager) loop() error {
 				return errors.New("changes stopped")
 			}
 			for _, modelUUID := range uuids {
-				if err := m.ensure(m.config.ControllerUUID, modelUUID); err != nil {
+				if err := m.ensure(modelUUID); err != nil {
 					return errors.Trace(err)
 				}
 			}
@@ -118,18 +122,26 @@ func (m *caasModelWorkerManager) loop() error {
 	}
 }
 
-func (m *caasModelWorkerManager) ensure(controllerUUID, modelUUID string) error {
-	starter := m.starter(controllerUUID, modelUUID)
+func (m *caasModelWorkerManager) ensure(modelUUID string) error {
+	starter := m.starter(modelUUID)
 	if err := m.runner.StartWorker(modelUUID, starter); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
 }
 
-func (m *caasModelWorkerManager) starter(controllerUUID, modelUUID string) func() (worker.Worker, error) {
+func (m *caasModelWorkerManager) starter(modelUUID string) func() (worker.Worker, error) {
 	return func() (worker.Worker, error) {
 		logger.Debugf("starting workers for CAAS model %q", modelUUID)
-		worker, err := m.config.NewWorker(controllerUUID, modelUUID)
+
+		// XXX CAAS: this is bad! Workers should never use
+		// *State/*CAASState directly. This is purely a shortcut for
+		// the CAAS prototype and should never make it into production
+		// code.
+		newCAASState := func() (*state.CAASState, error) {
+			return m.config.Backend.ForCAASModel(names.NewModelTag(modelUUID))
+		}
+		worker, err := m.config.NewWorker(modelUUID, newCAASState)
 		if err != nil {
 			return nil, errors.Annotatef(err, "cannot manage CAAS model %q", modelUUID)
 		}
