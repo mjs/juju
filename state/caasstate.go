@@ -24,11 +24,7 @@ type CAASState struct {
 	clock         clock.Clock
 }
 
-func newCAASState(
-	parentSt *State,
-	modelTag names.ModelTag,
-	clock clock.Clock,
-) (_ *CAASState, err error) {
+func newCAASState(parentSt *State, modelTag names.ModelTag, clock clock.Clock) (_ *CAASState, err error) {
 	session := parentSt.MongoSession().Copy()
 
 	defer func() {
@@ -67,6 +63,10 @@ func (st *CAASState) newStorage() storage.Storage {
 func (st *CAASState) start() error {
 	// XXX workers
 	return nil
+}
+
+func (st *CAASState) uuid() string {
+	return st.ModelUUID()
 }
 
 // XXX extract to dbIdMapper and embedded into State and CAAS state
@@ -113,6 +113,10 @@ func (st *CAASState) CAASModel() (*CAASModel, error) {
 
 func (st *CAASState) ModelTag() names.ModelTag {
 	return st.modelTag
+}
+
+func (st *CAASState) MongoSession() *mgo.Session {
+	return st.session
 }
 
 func (st *CAASState) Close() error {
@@ -252,4 +256,27 @@ func (st *CAASState) AddCAASApplication(args AddCAASApplicationArgs) (_ *CAASApp
 		return nil, errors.Trace(err)
 	}
 	return app, nil
+}
+
+func (st *CAASState) UpdateUploadedCharm(info CharmInfo) (*Charm, error) {
+	return updateUploadedCharm(st, info)
+}
+
+func (st *CAASState) PrepareLocalCharmUpload(curl *charm.URL) (chosenURL *charm.URL, err error) {
+	return prepareLocalCharmUpload(st, curl)
+}
+
+func (st *CAASState) PrepareStoreCharmUpload(curl *charm.URL) (*Charm, error) {
+	return prepareStoreCharmUpload(st, curl)
+}
+
+// AllCharms returns all charms in state.
+func (st *CAASState) AllCharms() ([]*Charm, error) {
+	return allCharms(st)
+}
+
+// Charm returns the charm with the given URL. Charms pending upload
+// to storage and placeholders are never returned.
+func (st *CAASState) Charm(curl *charm.URL) (*Charm, error) {
+	return loadCharm(st, curl)
 }
