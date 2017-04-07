@@ -58,6 +58,8 @@ type Context interface {
 	Resources() Resources
 
 	// XXX for a given model either State() or CAASState() will return nil
+	IsCAAS() bool
+	IsIAAS() bool
 
 	// State returns, /sigh, a *State. As yet, there is no way
 	// around this; in the not-too-distant future, we hope, its

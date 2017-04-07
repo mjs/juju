@@ -17,6 +17,13 @@ import (
 	"github.com/juju/juju/state"
 )
 
+// Charms defines the methods on the charms API end point.
+type Charms interface {
+	List(args params.CharmsList) (params.CharmsListResult, error)
+	CharmInfo(args params.CharmURL) (params.CharmInfo, error)
+	IsMetered(args params.CharmURL) (bool, error)
+}
+
 type backend interface {
 	Charm(curl *charm.URL) (*state.Charm, error)
 	AllCharms() ([]*state.Charm, error)
@@ -43,12 +50,20 @@ func (a *API) checkCanRead() error {
 
 // NewFacade provides the signature required for facade registration.
 func NewFacade(ctx facade.Context) (*API, error) {
+	var st backend
+	if ctx.IsCAAS() {
+		st = ctx.CAASState()
+	} else {
+		st = ctx.State()
+	}
+
 	authorizer := ctx.Auth()
 	if !authorizer.AuthClient() {
 		return nil, common.ErrPerm
 	}
 
 	return &API{
+		access:     st,
 		authorizer: authorizer,
 		backend:    ctx.State(),
 	}, nil
