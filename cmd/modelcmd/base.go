@@ -239,7 +239,10 @@ func (c *JujuCommandBase) RefreshModels(store jujuclient.ClientStore, controller
 		return errors.Trace(err)
 	}
 	for _, model := range models {
-		modelDetails := jujuclient.ModelDetails{ModelUUID: model.UUID}
+		modelDetails := jujuclient.ModelDetails{
+			ModelUUID: model.UUID,
+			Type:      jujuclient.ModelType(model.Type),
+		}
 		owner := names.NewUserTag(model.Owner)
 		modelName := jujuclient.JoinOwnerModelName(owner, model.Name)
 		if err := store.UpdateModel(controllerName, modelName, modelDetails); err != nil {
