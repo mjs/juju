@@ -56,19 +56,25 @@ func deployApplication(backend *state.CAASState, args params.CAASApplicationDepl
 		return errors.Errorf("charm url must include revision")
 	}
 
-	/* XXX needs charm first
-	var settings charm.Settings
-	settings, err = ch.Config().ParseSettingsYAML([]byte(args.ConfigYAML), args.ApplicationName)
+	ch, err := backend.Charm(curl)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	*/
+
+	if err := checkMinVersion(ch); err != nil {
+		return errors.Trace(err)
+	}
+
+	settings, err := ch.Config().ParseSettingsYAML([]byte(args.ConfigYAML), args.ApplicationName)
+	if err != nil {
+		return errors.Trace(err)
+	}
 
 	_, err = backend.AddCAASApplication(state.AddCAASApplicationArgs{
 		Name: args.ApplicationName,
-		// Charm:  XXX needs to exist and be loaded in state first,
+		Charm: ch,
 		Channel: csparams.Channel(args.Channel),
-		// XXX Settings: settings,
+		Settings: settings,
 	})
 	return errors.Trace(err)
 }
