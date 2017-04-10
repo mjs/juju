@@ -47,7 +47,7 @@ type LoggingStrategy interface {
 
 type agentLoggingStrategy struct {
 	ctxt       httpContext
-	st         *state.State
+	st         *stateUnion
 	releaser   func()
 	version    version.Number
 	entity     names.Tag
@@ -89,8 +89,8 @@ func (s *agentLoggingStrategy) Authenticate(req *http.Request) error {
 
 // Start creates the underlying DB logger. Part of LoggingStrategy.
 func (s *agentLoggingStrategy) Start() {
-	s.filePrefix = s.st.ModelUUID() + ":"
-	s.dbLogger = state.NewEntityDbLogger(s.st, s.entity, s.version)
+	s.filePrefix = s.st.State().ModelUUID() + ":"
+	s.dbLogger = state.NewEntityDbLogger(s.st.State(), s.entity, s.version)
 }
 
 // Log writes the record to the file and entity loggers. Part of

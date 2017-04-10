@@ -469,7 +469,7 @@ func (srv *Server) endpoints() []apihttp.Endpoint {
 			if err != nil {
 				return nil, nil, nil, errors.Trace(err)
 			}
-			rst, err := st.Resources()
+			rst, err := st.State().Resources()
 			if err != nil {
 				return nil, nil, nil, errors.Trace(err)
 			}
@@ -487,7 +487,7 @@ func (srv *Server) endpoints() []apihttp.Endpoint {
 			if err != nil {
 				return nil, nil, errors.Trace(err)
 			}
-			opener, err := resourceadapters.NewResourceOpener(st, tag.Id())
+			opener, err := resourceadapters.NewResourceOpener(st.State(), tag.Id())
 			if err != nil {
 				return nil, nil, errors.Trace(err)
 			}

@@ -20,7 +20,7 @@ import (
 // resourcesMigrationUploadHandler handles resources uploads for model migrations.
 type resourcesMigrationUploadHandler struct {
 	ctxt          httpContext
-	stateAuthFunc func(*http.Request) (*state.State, func(), error)
+	stateAuthFunc func(*http.Request) (*stateUnion, func(), error)
 }
 
 func (h *resourcesMigrationUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +59,7 @@ func (h *resourcesMigrationUploadHandler) ServeHTTP(w http.ResponseWriter, r *ht
 
 // processPost handles resources upload POST request after
 // authentication.
-func (h *resourcesMigrationUploadHandler) processPost(r *http.Request, st *state.State) (resource.Resource, error) {
+func (h *resourcesMigrationUploadHandler) processPost(r *http.Request, st *stateUnion) (resource.Resource, error) {
 	var empty resource.Resource
 	query := r.URL.Query()
 
@@ -73,7 +73,7 @@ func (h *resourcesMigrationUploadHandler) processPost(r *http.Request, st *state
 	if err != nil {
 		return empty, errors.Trace(err)
 	}
-	rSt, err := st.Resources()
+	rSt, err := st.State().Resources()
 	if err != nil {
 		return empty, errors.Trace(err)
 	}

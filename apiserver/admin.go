@@ -316,11 +316,11 @@ func filterFacades(registry *facade.Registry, allowFacade func(name string) bool
 }
 
 func (a *admin) checkCreds(req params.LoginRequest, lookForModelUser bool) (state.Entity, *time.Time, error) {
-	return doCheckCreds(a.root.state.State(), req, lookForModelUser, a.authenticator())
+	return doCheckCreds(a.root.state, req, lookForModelUser, a.authenticator())
 }
 
 func (a *admin) checkControllerMachineCreds(req params.LoginRequest) (state.Entity, error) {
-	return checkControllerMachineCreds(a.srv.state, req, a.authenticator())
+	return checkControllerMachineCreds(newStateUnion(a.srv.state), req, a.authenticator())
 }
 
 func (a *admin) authenticator() authentication.EntityAuthenticator {
@@ -358,7 +358,7 @@ var doCheckCreds = checkCreds
 // entity will be modelUserEntity, not *state.User (external users
 // don't have user entries) or *state.ModelUser (we
 // don't want to lose the local user information associated with that).
-func checkCreds(st *state.State, req params.LoginRequest, lookForModelUser bool, authenticator authentication.EntityAuthenticator) (state.Entity, *time.Time, error) {
+func checkCreds(st *stateUnion, req params.LoginRequest, lookForModelUser bool, authenticator authentication.EntityAuthenticator) (state.Entity, *time.Time, error) {
 	var tag names.Tag
 	if req.AuthTag != "" {
 		var err error
@@ -367,12 +367,13 @@ func checkCreds(st *state.State, req params.LoginRequest, lookForModelUser bool,
 			return nil, nil, errors.Trace(err)
 		}
 	}
-	var entityFinder authentication.EntityFinder = st
+
+	var entityFinder authentication.EntityFinder = st.State()
 	if lookForModelUser {
 		// When looking up model users, use a custom
 		// entity finder that looks up both the local user (if the user
 		// tag is in the local domain) and the model user.
-		entityFinder = modelUserEntityFinder{st}
+		entityFinder = modelUserEntityFinder{st.State()}
 	}
 	entity, err := authenticator.Authenticate(entityFinder, tag, req)
 	if err != nil {
@@ -396,7 +397,7 @@ func checkCreds(st *state.State, req params.LoginRequest, lookForModelUser bool,
 // machine creating an API connection for a different model so it can
 // run workers that act on behalf of a hosted model.
 func checkControllerMachineCreds(
-	controllerSt *state.State,
+	controllerSt *stateUnion,
 	req params.LoginRequest,
 	authenticator authentication.EntityAuthenticator,
 ) (state.Entity, error) {
