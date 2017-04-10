@@ -171,6 +171,7 @@ func (c *Client) ListModels(user string) ([]base.UserModel, error) {
 		result[i] = base.UserModel{
 			Name:           model.Name,
 			UUID:           model.UUID,
+			Type:           model.Type,
 			Owner:          owner.Id(),
 			LastConnection: model.LastConnection,
 		}

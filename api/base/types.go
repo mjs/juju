@@ -18,6 +18,7 @@ import (
 type UserModel struct {
 	Name           string
 	UUID           string
+	Type           string
 	Owner          string
 	LastConnection *time.Time
 }
