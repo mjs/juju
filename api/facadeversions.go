@@ -23,6 +23,7 @@ var facadeVersions = map[string]int{
 	"Backups":                      1,
 	"Block":                        2,
 	"Bundle":                       1,
+	"CAASApplication":              1,
 	"CharmRevisionUpdater":         2,
 	"Charms":                       2,
 	"Cleaner":                      2,
