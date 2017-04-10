@@ -14,6 +14,7 @@ import (
 // model.
 var caasModelFacadeNames = set.NewStrings(
 	"CAASApplication",
+	"Charms",
 )
 
 func caasModelFacadesOnly(facadeName, _ string) error {
