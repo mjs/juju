@@ -22,13 +22,23 @@ import (
 	"github.com/juju/errors"
 	ziputil "github.com/juju/utils/zip"
 	"gopkg.in/juju/charm.v6-unstable"
+	"gopkg.in/mgo.v2"
 
 	"github.com/juju/juju/apiserver/application"
+	"github.com/juju/juju/apiserver/caasapplication"
 	"github.com/juju/juju/apiserver/common"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/state"
 	"github.com/juju/juju/state/storage"
 )
+
+type charmBackend interface {
+	ModelUUID() string
+	MongoSession() *mgo.Session
+	Charm(curl *charm.URL) (*state.Charm, error)
+	PrepareLocalCharmUpload(curl *charm.URL) (*charm.URL, error)
+	PrepareStoreCharmUpload(curl *charm.URL) (*state.Charm, error)
+}
 
 type FailableHandlerFunc func(http.ResponseWriter, *http.Request) error
 
@@ -242,6 +252,13 @@ func (h *charmsHandler) processPost(r *http.Request, st *stateUnion) (*charm.URL
 		return nil, errors.NewBadRequest(err, "")
 	}
 
+	var cb charmBackend
+	if st.IsCAAS() {
+		cb = st.CAASState()
+	} else {
+		cb = st.State()
+	}
+
 	// We got it, now let's reserve a charm URL for it in state.
 	curl := &charm.URL{
 		Schema:   schema,
@@ -251,7 +268,7 @@ func (h *charmsHandler) processPost(r *http.Request, st *stateUnion) (*charm.URL
 	}
 	switch schema {
 	case "local":
-		curl, err = st.State().PrepareLocalCharmUpload(curl)
+		curl, err = cb.PrepareLocalCharmUpload(curl)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -281,7 +298,7 @@ func (h *charmsHandler) processPost(r *http.Request, st *stateUnion) (*charm.URL
 				return nil, errors.NewBadRequest(errors.NewNotValid(err, "revision"), "")
 			}
 		}
-		if _, err := st.State().PrepareStoreCharmUpload(curl); err != nil {
+		if _, err := cb.PrepareStoreCharmUpload(curl); err != nil {
 			return nil, errors.Trace(err)
 		}
 	default:
@@ -415,15 +432,27 @@ func (h *charmsHandler) repackageAndUploadCharm(st *stateUnion, archive *charm.C
 	}
 	bundleSHA256 := hex.EncodeToString(hash.Sum(nil))
 
-	info := application.CharmArchive{
-		ID:     curl,
-		Charm:  archive,
-		Data:   &repackagedArchive,
-		Size:   int64(repackagedArchive.Len()),
-		SHA256: bundleSHA256,
+	if st.IsCAAS() {
+		info := caasapplication.CharmArchive{
+			ID:     curl,
+			Charm:  archive,
+			Data:   &repackagedArchive,
+			Size:   int64(repackagedArchive.Len()),
+			SHA256: bundleSHA256,
+		}
+		// Store the charm archive in environment storage.
+		return caasapplication.StoreCharmArchive(st.CAASState(), info)
+	} else {
+		info := application.CharmArchive{
+			ID:     curl,
+			Charm:  archive,
+			Data:   &repackagedArchive,
+			Size:   int64(repackagedArchive.Len()),
+			SHA256: bundleSHA256,
+		}
+		// Store the charm archive in environment storage.
+		return application.StoreCharmArchive(st.State(), info)
 	}
-	// Store the charm archive in environment storage.
-	return application.StoreCharmArchive(st.State(), info)
 }
 
 // processGet handles a charm file GET request after authentication.
@@ -458,9 +487,16 @@ func (h *charmsHandler) processGet(r *http.Request, st *stateUnion) (
 		fileArg = "icon.svg"
 	}
 
-	store := storage.NewStorage(st.State().ModelUUID(), st.State().MongoSession())
+	var cb charmBackend
+	if st.IsCAAS() {
+		cb = st.CAASState()
+	} else {
+		cb = st.State()
+	}
+
 	// Use the storage to retrieve and save the charm archive.
-	ch, err := st.State().Charm(curl)
+	store := storage.NewStorage(cb.ModelUUID(), cb.MongoSession())
+	ch, err := cb.Charm(curl)
 	if err != nil {
 		return errRet(errors.Annotate(err, "cannot get charm from state"))
 	}
