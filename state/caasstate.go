@@ -14,6 +14,7 @@ import (
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/txn"
 
+	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/state/storage"
 	"github.com/juju/juju/state/watcher"
 	"github.com/juju/juju/status"
@@ -295,6 +296,16 @@ func (st *CAASState) AddCAASApplication(args AddCAASApplicationArgs) (_ *CAASApp
 		return nil, errors.Trace(err)
 	}
 	return app, nil
+}
+
+// ModelConfig returns the complete config for the model represented
+// by this state.
+func (st *CAASState) ModelConfig() (*config.Config, error) {
+	modelSettings, err := readSettings(st, settingsC, modelGlobalKey)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return config.New(config.NoDefaults, modelSettings.Map())
 }
 
 func (st *CAASState) UpdateUploadedCharm(info CharmInfo) (*Charm, error) {

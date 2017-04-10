@@ -402,6 +402,10 @@ func (r *apiHandler) GetAuthEntity() state.Entity {
 
 // HasPermission returns true if the logged in user can perform <operation> on <target>.
 func (r *apiHandler) HasPermission(operation permission.Access, target names.Tag) (bool, error) {
+	// XXX For CAAS, for now we just always say "yes"...
+	if r.state.IsCAAS() {
+		return true, nil
+	}
 	return common.HasPermission(r.state.State().UserPermission, r.entity.Tag(), operation, target)
 }
 
