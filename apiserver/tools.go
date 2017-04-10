@@ -21,7 +21,6 @@ import (
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/environs"
 	envtools "github.com/juju/juju/environs/tools"
-	"github.com/juju/juju/state"
 	"github.com/juju/juju/state/binarystorage"
 	"github.com/juju/juju/state/stateenvirons"
 	"github.com/juju/juju/tools"
@@ -30,7 +29,7 @@ import (
 // toolsHandler handles tool upload through HTTPS in the API server.
 type toolsUploadHandler struct {
 	ctxt          httpContext
-	stateAuthFunc func(*http.Request) (*state.State, func(), error)
+	stateAuthFunc func(*http.Request) (*stateUnion, func(), error)
 }
 
 // toolsHandler handles tool download through HTTPS in the API server.
@@ -103,12 +102,12 @@ func (h *toolsUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // processGet handles a tools GET request.
-func (h *toolsDownloadHandler) processGet(r *http.Request, st *state.State) ([]byte, error) {
+func (h *toolsDownloadHandler) processGet(r *http.Request, st *stateUnion) ([]byte, error) {
 	version, err := version.ParseBinary(r.URL.Query().Get(":version"))
 	if err != nil {
 		return nil, errors.Annotate(err, "error parsing version")
 	}
-	storage, err := st.ToolsStorage()
+	storage, err := st.State().ToolsStorage()
 	if err != nil {
 		return nil, errors.Annotate(err, "error getting tools storage")
 	}
@@ -138,9 +137,9 @@ func (h *toolsDownloadHandler) processGet(r *http.Request, st *state.State) ([]b
 // fetchAndCacheTools fetches tools with the specified version by searching for a URL
 // in simplestreams and GETting it, caching the result in tools storage before returning
 // to the caller.
-func (h *toolsDownloadHandler) fetchAndCacheTools(v version.Binary, stor binarystorage.Storage, st *state.State) (io.ReadCloser, error) {
+func (h *toolsDownloadHandler) fetchAndCacheTools(v version.Binary, stor binarystorage.Storage, st *stateUnion) (io.ReadCloser, error) {
 	newEnviron := stateenvirons.GetNewEnvironFunc(environs.New)
-	env, err := newEnviron(st)
+	env, err := newEnviron(st.State())
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +200,7 @@ func (h *toolsDownloadHandler) sendTools(w http.ResponseWriter, statusCode int, 
 }
 
 // processPost handles a tools upload POST request after authentication.
-func (h *toolsUploadHandler) processPost(r *http.Request, st *state.State) (*tools.Tools, error) {
+func (h *toolsUploadHandler) processPost(r *http.Request, st *stateUnion) (*tools.Tools, error) {
 	query := r.URL.Query()
 
 	binaryVersionParam := query.Get("binaryVersion")
@@ -244,10 +243,10 @@ func (h *toolsUploadHandler) processPost(r *http.Request, st *state.State) (*too
 	return h.handleUpload(r.Body, toolsVersions, serverRoot, st)
 }
 
-func (h *toolsUploadHandler) getServerRoot(r *http.Request, query url.Values, st *state.State) (string, error) {
+func (h *toolsUploadHandler) getServerRoot(r *http.Request, query url.Values, st *stateUnion) (string, error) {
 	uuid := query.Get(":modeluuid")
 	if uuid == "" {
-		env, err := st.Model()
+		env, err := st.State().Model()
 		if err != nil {
 			return "", err
 		}
@@ -257,13 +256,13 @@ func (h *toolsUploadHandler) getServerRoot(r *http.Request, query url.Values, st
 }
 
 // handleUpload uploads the tools data from the reader to env storage as the specified version.
-func (h *toolsUploadHandler) handleUpload(r io.Reader, toolsVersions []version.Binary, serverRoot string, st *state.State) (*tools.Tools, error) {
+func (h *toolsUploadHandler) handleUpload(r io.Reader, toolsVersions []version.Binary, serverRoot string, st *stateUnion) (*tools.Tools, error) {
 	// Check if changes are allowed and the command may proceed.
-	blockChecker := common.NewBlockChecker(st)
+	blockChecker := common.NewBlockChecker(st.State())
 	if err := blockChecker.ChangeAllowed(); err != nil {
 		return nil, errors.Trace(err)
 	}
-	storage, err := st.ToolsStorage()
+	storage, err := st.State().ToolsStorage()
 	if err != nil {
 		return nil, err
 	}

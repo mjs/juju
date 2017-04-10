@@ -28,7 +28,6 @@ import (
 	agenttools "github.com/juju/juju/agent/tools"
 	"github.com/juju/juju/apiserver/common/apihttp"
 	"github.com/juju/juju/apiserver/params"
-	"github.com/juju/juju/state"
 	"github.com/juju/juju/state/binarystorage"
 	jujuversion "github.com/juju/juju/version"
 )
@@ -137,8 +136,12 @@ func (gr *guiRouter) ensureFileHandler(h func(gh *guiHandler, w http.ResponseWri
 // and archive hash.
 func (gr *guiRouter) ensureFiles(req *http.Request) (rootDir string, hash string, err error) {
 	// Retrieve the Juju GUI info from the GUI storage.
-	st := gr.ctxt.srv.statePool.SystemState()
-	storage, err := st.GUIStorage()
+	st, releaser, err := gr.ctxt.stateForRequestUnauthenticated(req)
+	if err != nil {
+		return "", "", errors.Annotate(err, "cannot open state")
+	}
+	defer releaser()
+	storage, err := st.State().GUIStorage()
 	if err != nil {
 		return "", "", errors.Annotate(err, "cannot open GUI storage")
 	}
@@ -184,8 +187,8 @@ func (gr *guiRouter) ensureFiles(req *http.Request) (rootDir string, hash string
 
 // guiVersionAndHash returns the version and the SHA256 hash of the current
 // Juju GUI archive.
-func guiVersionAndHash(st *state.State, storage binarystorage.Storage) (vers, hash string, err error) {
-	currentVers, err := st.GUIVersion()
+func guiVersionAndHash(st *stateUnion, storage binarystorage.Storage) (vers, hash string, err error) {
+	currentVers, err := st.State().GUIVersion()
 	if errors.IsNotFound(err) {
 		return "", "", errors.NotFoundf("Juju GUI")
 	}
@@ -499,7 +502,7 @@ func (h *guiArchiveHandler) handleGet(w http.ResponseWriter, req *http.Request) 
 		return errors.Annotate(err, "cannot open state")
 	}
 	defer releaser()
-	storage, err := st.GUIStorage()
+	storage, err := st.State().GUIStorage()
 	if err != nil {
 		return errors.Annotate(err, "cannot open GUI storage")
 	}
@@ -513,7 +516,7 @@ func (h *guiArchiveHandler) handleGet(w http.ResponseWriter, req *http.Request) 
 
 	// Prepare and send the response.
 	var currentVersion string
-	vers, err := st.GUIVersion()
+	vers, err := st.State().GUIVersion()
 	if err == nil {
 		currentVersion = vers.String()
 	} else if !errors.IsNotFound(err) {
@@ -567,7 +570,7 @@ func (h *guiArchiveHandler) handlePost(w http.ResponseWriter, req *http.Request)
 		return errors.Annotate(err, "cannot open state")
 	}
 	defer releaser()
-	storage, err := st.GUIStorage()
+	storage, err := st.State().GUIStorage()
 	if err != nil {
 		return errors.Annotate(err, "cannot open GUI storage")
 	}
@@ -598,7 +601,7 @@ func (h *guiArchiveHandler) handlePost(w http.ResponseWriter, req *http.Request)
 		Version: vers,
 		SHA256:  hash,
 	}
-	if currentVers, err := st.GUIVersion(); err == nil {
+	if currentVers, err := st.State().GUIVersion(); err == nil {
 		if currentVers == vers {
 			resp.Current = true
 		}
@@ -651,7 +654,7 @@ func (h *guiVersionHandler) handlePut(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Switch to the provided GUI version.
-	if err = st.GUISetVersion(selected.Version); err != nil {
+	if err := st.State().GUISetVersion(selected.Version); err != nil {
 		return errors.Trace(err)
 	}
 	return nil

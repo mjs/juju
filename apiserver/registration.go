@@ -97,7 +97,7 @@ func (h *registerUserHandler) ServeHTTP(w http.ResponseWriter, req *http.Request
 // NOTE(axw) it is important that the client and server choose their
 // own nonces, because reusing a nonce means that the key-stream can
 // be revealed.
-func (h *registerUserHandler) processPost(req *http.Request, st *state.State) (
+func (h *registerUserHandler) processPost(req *http.Request, st *stateUnion) (
 	names.UserTag, *params.SecretKeyLoginResponse, error,
 ) {
 
@@ -125,7 +125,7 @@ func (h *registerUserHandler) processPost(req *http.Request, st *state.State) (
 	}
 
 	// Decrypt the ciphertext with the user's secret key (if it has one).
-	user, err := st.User(userTag)
+	user, err := st.State().User(userTag)
 	if err != nil {
 		return failure(err)
 	}
@@ -155,7 +155,7 @@ func (h *registerUserHandler) processPost(req *http.Request, st *state.State) (
 
 	// Respond with the CA-cert and password, encrypted again with the
 	// secret key.
-	responsePayload, err := h.getSecretKeyLoginResponsePayload(st, userTag)
+	responsePayload, err := h.getSecretKeyLoginResponsePayload(st.State(), userTag)
 	if err != nil {
 		return failure(errors.Trace(err))
 	}

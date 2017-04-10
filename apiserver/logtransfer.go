@@ -17,7 +17,7 @@ import (
 
 type migrationLoggingStrategy struct {
 	ctxt       httpContext
-	st         *state.State
+	st         *stateUnion
 	releaser   func()
 	filePrefix string
 	dbLogger   *state.DbLogger
@@ -57,9 +57,9 @@ func (s *migrationLoggingStrategy) Authenticate(req *http.Request) error {
 
 // Start creates the destination DB logger. Part of LoggingStrategy.
 func (s *migrationLoggingStrategy) Start() {
-	s.filePrefix = s.st.ModelUUID() + ":"
-	s.dbLogger = state.NewDbLogger(s.st)
-	s.tracker = newLogTracker(s.st)
+	s.filePrefix = s.st.State().ModelUUID() + ":"
+	s.dbLogger = state.NewDbLogger(s.st.State())
+	s.tracker = newLogTracker(s.st.State())
 }
 
 // Log writes the given record to the DB and to the backup file

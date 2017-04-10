@@ -39,7 +39,7 @@ func (h *backupHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 	defer releaser()
 
-	backups, closer := newBackups(st)
+	backups, closer := newBackups(st.State())
 	defer closer.Close()
 
 	switch req.Method {
