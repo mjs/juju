@@ -85,7 +85,7 @@ func (h *debugLogHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		if err := h.handle(st, params, socket, h.ctxt.stop()); err != nil {
+		if err := h.handle(st.State(), params, socket, h.ctxt.stop()); err != nil {
 			if isBrokenPipe(err) {
 				logger.Tracef("debug-log handler stopped (client disconnected)")
 			} else {

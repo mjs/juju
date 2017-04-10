@@ -76,7 +76,7 @@ func (h *CharmsHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type charmsHandler struct {
 	ctxt          httpContext
 	dataDir       string
-	stateAuthFunc func(*http.Request) (*state.State, func(), error)
+	stateAuthFunc func(*http.Request) (*stateUnion, func(), error)
 }
 
 // bundleContentSenderFunc functions are responsible for sending a
@@ -202,7 +202,7 @@ func (h *charmsHandler) archiveSender(w http.ResponseWriter, r *http.Request, bu
 }
 
 // processPost handles a charm upload POST request after authentication.
-func (h *charmsHandler) processPost(r *http.Request, st *state.State) (*charm.URL, error) {
+func (h *charmsHandler) processPost(r *http.Request, st *stateUnion) (*charm.URL, error) {
 	query := r.URL.Query()
 	schema := query.Get("schema")
 	if schema == "" {
@@ -251,7 +251,7 @@ func (h *charmsHandler) processPost(r *http.Request, st *state.State) (*charm.UR
 	}
 	switch schema {
 	case "local":
-		curl, err = st.PrepareLocalCharmUpload(curl)
+		curl, err = st.State().PrepareLocalCharmUpload(curl)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -281,7 +281,7 @@ func (h *charmsHandler) processPost(r *http.Request, st *state.State) (*charm.UR
 				return nil, errors.NewBadRequest(errors.NewNotValid(err, "revision"), "")
 			}
 		}
-		if _, err := st.PrepareStoreCharmUpload(curl); err != nil {
+		if _, err := st.State().PrepareStoreCharmUpload(curl); err != nil {
 			return nil, errors.Trace(err)
 		}
 	default:
@@ -387,7 +387,7 @@ func (d byDepth) Less(i, j int) bool { return depth(d[i]) < depth(d[j]) }
 // repackageAndUploadCharm expands the given charm archive to a
 // temporary directoy, repackages it with the given curl's revision,
 // then uploads it to storage, and finally updates the state.
-func (h *charmsHandler) repackageAndUploadCharm(st *state.State, archive *charm.CharmArchive, curl *charm.URL) error {
+func (h *charmsHandler) repackageAndUploadCharm(st *stateUnion, archive *charm.CharmArchive, curl *charm.URL) error {
 	// Create a temp dir to contain the extracted charm dir.
 	tempDir, err := ioutil.TempDir("", "charm-download")
 	if err != nil {
@@ -423,13 +423,13 @@ func (h *charmsHandler) repackageAndUploadCharm(st *state.State, archive *charm.
 		SHA256: bundleSHA256,
 	}
 	// Store the charm archive in environment storage.
-	return application.StoreCharmArchive(st, info)
+	return application.StoreCharmArchive(st.State(), info)
 }
 
 // processGet handles a charm file GET request after authentication.
 // It returns the bundle path, the requested file path (if any), whether the
 // default charm icon has been requested and an error.
-func (h *charmsHandler) processGet(r *http.Request, st *state.State) (
+func (h *charmsHandler) processGet(r *http.Request, st *stateUnion) (
 	archivePath string,
 	fileArg string,
 	serveIcon bool,
@@ -458,9 +458,9 @@ func (h *charmsHandler) processGet(r *http.Request, st *state.State) (
 		fileArg = "icon.svg"
 	}
 
-	store := storage.NewStorage(st.ModelUUID(), st.MongoSession())
+	store := storage.NewStorage(st.State().ModelUUID(), st.State().MongoSession())
 	// Use the storage to retrieve and save the charm archive.
-	ch, err := st.Charm(curl)
+	ch, err := st.State().Charm(curl)
 	if err != nil {
 		return errRet(errors.Annotate(err, "cannot get charm from state"))
 	}
@@ -517,8 +517,8 @@ func writeCharmToTempFile(r io.Reader) (string, error) {
 	return tempFile.Name(), nil
 }
 
-func modelIsImporting(st *state.State) (bool, error) {
-	model, err := st.Model()
+func modelIsImporting(st *stateUnion) (bool, error) {
+	model, err := st.State().Model()
 	if err != nil {
 		return false, errors.Trace(err)
 	}

@@ -41,7 +41,7 @@ func newLogStreamEndpointHandler(ctxt httpContext) *logStreamEndpointHandler {
 		if err != nil {
 			return nil, nil, errors.Trace(err)
 		}
-		return &logStreamState{st}, releaser, nil
+		return &logStreamState{st.State()}, releaser, nil
 	}
 	return &logStreamEndpointHandler{
 		stopCh:    ctxt.stop(),

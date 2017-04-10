@@ -14,7 +14,6 @@ import (
 
 	"github.com/juju/juju/apiserver/common"
 	"github.com/juju/juju/apiserver/params"
-	"github.com/juju/juju/state"
 	"github.com/juju/juju/state/storage"
 )
 
@@ -44,7 +43,7 @@ func (h *RestHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type modelRestHandler struct {
 	ctxt          httpContext
 	dataDir       string
-	stateAuthFunc func(*http.Request) (*state.State, func(), error)
+	stateAuthFunc func(*http.Request) (*stateUnion, func(), error)
 }
 
 // ServeGet handles http GET requests.
@@ -63,7 +62,7 @@ func (h *modelRestHandler) ServeGet(w http.ResponseWriter, r *http.Request) erro
 }
 
 // processGet handles a ReST GET request after authentication.
-func (h *modelRestHandler) processGet(r *http.Request, w http.ResponseWriter, st *state.State) error {
+func (h *modelRestHandler) processGet(r *http.Request, w http.ResponseWriter, st *stateUnion) error {
 	query := r.URL.Query()
 	entity := query.Get(":entity")
 	// TODO(wallyworld) - support more than just "remote-application"
@@ -76,10 +75,10 @@ func (h *modelRestHandler) processGet(r *http.Request, w http.ResponseWriter, st
 }
 
 // processRemoteApplication handles a request for attributes on remote applications.
-func (h *modelRestHandler) processRemoteApplication(r *http.Request, w http.ResponseWriter, st *state.State) error {
+func (h *modelRestHandler) processRemoteApplication(r *http.Request, w http.ResponseWriter, st *stateUnion) error {
 	query := r.URL.Query()
 	name := query.Get(":name")
-	remoteApp, err := st.RemoteApplication(name)
+	remoteApp, err := st.State().RemoteApplication(name)
 	if err != nil {
 		return errors.Trace(err)
 	}
