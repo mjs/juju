@@ -23,6 +23,7 @@ import (
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/annotations"
 	"github.com/juju/juju/api/application"
+	"github.com/juju/juju/api/caasapplication"
 	apicharms "github.com/juju/juju/api/charms"
 	"github.com/juju/juju/api/modelconfig"
 	apiparams "github.com/juju/juju/apiserver/params"
@@ -33,6 +34,7 @@ import (
 	"github.com/juju/juju/constraints"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/instance"
+	"github.com/juju/juju/jujuclient"
 	"github.com/juju/juju/resource/resourceadapters"
 	"github.com/juju/juju/storage"
 )
@@ -82,6 +84,7 @@ type DeployAPI interface {
 	ModelAPI
 
 	// ApplicationClient
+	CAASDeploy(caasapplication.DeployArgs) error
 	CharmInfo(string) (*apicharms.CharmInfo, error)
 	Deploy(application.DeployArgs) error
 	Status(patterns []string) (*apiparams.FullStatus, error)
@@ -115,6 +118,10 @@ type applicationClient struct {
 	*application.Client
 }
 
+type caasApplicationClient struct {
+	*caasapplication.Client
+}
+
 type modelConfigClient struct {
 	*modelconfig.Client
 }
@@ -140,6 +147,7 @@ type deployAPIAdapter struct {
 	*apiClient
 	*charmsClient
 	*applicationClient
+	*caasApplicationClient
 	*modelConfigClient
 	*charmRepoClient
 	*charmstoreClient
@@ -163,6 +171,10 @@ func (a *deployAPIAdapter) Deploy(args application.DeployArgs) error {
 	}
 
 	return errors.Trace(a.applicationClient.Deploy(args))
+}
+
+func (a *deployAPIAdapter) CAASDeploy(args caasapplication.DeployArgs) error {
+	return errors.Trace(a.caasApplicationClient.Deploy(args))
 }
 
 func (a *deployAPIAdapter) Resolve(cfg *config.Config, url *charm.URL) (
@@ -208,14 +220,15 @@ func NewDeployCommandWithDefaultAPI(steps []DeployStep) cmd.Command {
 		cstoreClient := newCharmStoreClient(bakeryClient).WithChannel(deployCmd.Channel)
 
 		adapter := &deployAPIAdapter{
-			Connection:        apiRoot,
-			apiClient:         &apiClient{Client: apiRoot.Client()},
-			charmsClient:      &charmsClient{Client: apicharms.NewClient(apiRoot)},
-			applicationClient: &applicationClient{Client: application.NewClient(apiRoot)},
-			modelConfigClient: &modelConfigClient{Client: modelconfig.NewClient(apiRoot)},
-			charmstoreClient:  &charmstoreClient{Client: cstoreClient},
-			annotationsClient: &annotationsClient{Client: annotations.NewClient(apiRoot)},
-			charmRepoClient:   &charmRepoClient{CharmStore: charmrepo.NewCharmStoreFromClient(cstoreClient)},
+			Connection:            apiRoot,
+			apiClient:             &apiClient{Client: apiRoot.Client()},
+			charmsClient:          &charmsClient{Client: apicharms.NewClient(apiRoot)},
+			applicationClient:     &applicationClient{Client: application.NewClient(apiRoot)},
+			caasApplicationClient: &caasApplicationClient{Client: caasapplication.NewClient(apiRoot)},
+			modelConfigClient:     &modelConfigClient{Client: modelconfig.NewClient(apiRoot)},
+			charmstoreClient:      &charmstoreClient{Client: cstoreClient},
+			annotationsClient:     &annotationsClient{Client: annotations.NewClient(apiRoot)},
+			charmRepoClient:       &charmRepoClient{CharmStore: charmrepo.NewCharmStoreFromClient(cstoreClient)},
 		}
 
 		return adapter, nil
@@ -511,6 +524,25 @@ func (c *DeployCommand) deployCharm(
 	ctx *cmd.Context,
 	apiRoot DeployAPI,
 ) (rErr error) {
+	store := c.ClientStore()
+	modelDetails, err := store.ModelByName(
+		c.ControllerName(),
+		c.ModelName(),
+	)
+	if errors.IsNotFound(err) {
+		if err := c.RefreshModels(store, c.ControllerName()); err != nil {
+			return errors.Annotate(err, "refreshing models cache")
+		}
+		// Now try again.
+		modelDetails, err = store.ModelByName(
+			c.ControllerName(),
+			c.ModelName(),
+		)
+	}
+	if err != nil {
+		return errors.Annotate(err, "getting model details")
+	}
+
 	charmInfo, err := apiRoot.CharmInfo(id.URL.String())
 	if err != nil {
 		return err
@@ -590,18 +622,28 @@ func (c *DeployCommand) deployCharm(
 		return errors.Trace(err)
 	}
 
-	return errors.Trace(apiRoot.Deploy(application.DeployArgs{
-		CharmID:          id,
-		Cons:             c.Constraints,
-		ApplicationName:  serviceName,
-		Series:           series,
-		NumUnits:         numUnits,
-		ConfigYAML:       string(configYAML),
-		Placement:        c.Placement,
-		Storage:          c.Storage,
-		Resources:        ids,
-		EndpointBindings: c.Bindings,
-	}))
+	if modelDetails.Type == jujuclient.CAASModel {
+		return errors.Trace(apiRoot.CAASDeploy(caasapplication.DeployArgs{
+			CharmID:         id,
+			ApplicationName: serviceName,
+			Series:          series,
+			NumUnits:        numUnits,
+			ConfigYAML:      string(configYAML),
+		}))
+	} else {
+		return errors.Trace(apiRoot.Deploy(application.DeployArgs{
+			CharmID:          id,
+			Cons:             c.Constraints,
+			ApplicationName:  serviceName,
+			Series:           series,
+			NumUnits:         numUnits,
+			ConfigYAML:       string(configYAML),
+			Placement:        c.Placement,
+			Storage:          c.Storage,
+			Resources:        ids,
+			EndpointBindings: c.Bindings,
+		}))
+	}
 }
 
 const parseBindErrorPrefix = "--bind must be in the form '[<default-space>] [<endpoint-name>=<space> ...]'. "
