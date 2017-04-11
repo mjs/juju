@@ -65,15 +65,18 @@ func deployApplication(backend *state.CAASState, args params.CAASApplicationDepl
 		return errors.Trace(err)
 	}
 
-	settings, err := ch.Config().ParseSettingsYAML([]byte(args.ConfigYAML), args.ApplicationName)
-	if err != nil {
-		return errors.Trace(err)
+	var settings charm.Settings
+	if len(args.ConfigYAML) > 0 {
+		settings, err = ch.Config().ParseSettingsYAML([]byte(args.ConfigYAML), args.ApplicationName)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	_, err = backend.AddCAASApplication(state.AddCAASApplicationArgs{
-		Name: args.ApplicationName,
-		Charm: ch,
-		Channel: csparams.Channel(args.Channel),
+		Name:     args.ApplicationName,
+		Charm:    ch,
+		Channel:  csparams.Channel(args.Channel),
 		Settings: settings,
 	})
 	return errors.Trace(err)
