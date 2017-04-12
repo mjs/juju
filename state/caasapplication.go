@@ -344,7 +344,7 @@ func (a *CAASApplication) SetCharm(cfg SetCharmConfig) (err error) {
 		if a.doc.CharmURL.String() == cfg.Charm.URL().String() {
 			// Charm URL already set; just update the force flag and channel.
 			ops = append(ops, txn.Op{
-				C:  applicationsC,
+				C:  caasApplicationsC,
 				Id: a.doc.DocID,
 				Update: bson.D{{"$set", bson.D{
 					{"cs-channel", channel},
@@ -386,7 +386,7 @@ func (a *CAASApplication) String() string {
 // state. It returns an error that satisfies errors.IsNotFound if the
 // application has been removed.
 func (a *CAASApplication) Refresh() error {
-	applications, closer := a.st.db().GetCollection(applicationsC)
+	applications, closer := a.st.db().GetCollection(caasApplicationsC)
 	defer closer()
 
 	err := applications.FindId(a.doc.DocID).One(&a.doc)
@@ -499,7 +499,7 @@ func (a *CAASApplication) addCAASUnitOpsWithCons(args caasApplicationAddCAASUnit
 // incUnitCountOp returns the operation to increment the application's unit count.
 func (a *CAASApplication) incUnitCountOp(asserts bson.D) txn.Op {
 	op := txn.Op{
-		C:      applicationsC,
+		C:      caasApplicationsC,
 		Id:     a.doc.DocID,
 		Update: bson.D{{"$inc", bson.D{{"unitcount", 1}}}},
 	}
@@ -518,7 +518,7 @@ func (a *CAASApplication) AddCAASUnit() (caasunit *CAASUnit, err error) {
 	}
 
 	if err := a.st.runTransaction(ops); err == txn.ErrAborted {
-		if alive, err := isAlive(a.st, applicationsC, a.doc.DocID); err != nil {
+		if alive, err := isAlive(a.st, caasApplicationsC, a.doc.DocID); err != nil {
 			return nil, err
 		} else if !alive {
 			return nil, errors.New("application is not alive")

@@ -209,7 +209,7 @@ func (st *CAASState) AddCAASApplication(args AddCAASApplicationArgs) (_ *CAASApp
 		return nil, errors.Trace(err)
 	}
 
-	if exists, err := isNotDead(st, applicationsC, args.Name); err != nil {
+	if exists, err := isNotDead(st, caasApplicationsC, args.Name); err != nil {
 		return nil, errors.Trace(err)
 	} else if exists {
 		return nil, errors.Errorf("application already exists")
@@ -252,7 +252,7 @@ func (st *CAASState) AddCAASApplication(args AddCAASApplicationArgs) (_ *CAASApp
 			}
 			*/
 			// Ensure a local application with the same name doesn't exist.
-			if exists, err := isNotDead(st, applicationsC, args.Name); err != nil {
+			if exists, err := isNotDead(st, caasApplicationsC, args.Name); err != nil {
 				return nil, errors.Trace(err)
 			} else if exists {
 				return nil, errLocalApplicationExists
@@ -261,7 +261,7 @@ func (st *CAASState) AddCAASApplication(args AddCAASApplicationArgs) (_ *CAASApp
 		// The addCAASApplicationOps does not include the model alive assertion,
 		// so we add it here.
 		ops := []txn.Op{
-			assertModelActiveOp(st.ModelUUID()),
+			assertCAASModelActiveOp(st.ModelUUID()),
 		}
 		addOps, err := addCAASApplicationOps(st, addCAASApplicationOpsArgs{
 			appDoc:   appDoc,
@@ -287,12 +287,12 @@ func (st *CAASState) AddCAASApplication(args AddCAASApplicationArgs) (_ *CAASApp
 	// At the last moment before inserting the application, prime status history.
 	probablyUpdateStatusHistory(st, app.globalKey(), statusDoc)
 
-	if err = st.db().Run(buildTxn); err != nil {
+	if err := st.db().Run(buildTxn); err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	// Refresh to pick the txn-revno.
-	if err = app.Refresh(); err != nil {
+	if err := app.Refresh(); err != nil {
 		return nil, errors.Trace(err)
 	}
 	return app, nil

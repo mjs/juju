@@ -193,3 +193,13 @@ func (m *CAASModel) refresh(query mongo.Query) error {
 	}
 	return err
 }
+
+// assertCAASModelActiveOp returns a txn.Op that asserts the given
+// CAAS model UUID refers to an Alive model.
+func assertCAASModelActiveOp(modelUUID string) txn.Op {
+	return txn.Op{
+		C:      caasModelsC,
+		Id:     modelUUID,
+		Assert: isAliveDoc,
+	}
+}
