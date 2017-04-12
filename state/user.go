@@ -182,9 +182,9 @@ func createInitialUserOps(controllerUUID string, user names.UserTag, password, s
 
 }
 
-// getUser fetches information about the user with the
+// loadUser fetches information about the user with the
 // given name into the provided userDoc.
-func (st *State) getUser(name string, udoc *userDoc) error {
+func loadUser(st modelBackend, name string, udoc *userDoc) error {
 	users, closer := st.db().GetCollection(usersC)
 	defer closer()
 
@@ -199,13 +199,12 @@ func (st *State) getUser(name string, udoc *userDoc) error {
 	return err
 }
 
-// User returns the state User for the given name.
-func (st *State) User(tag names.UserTag) (*User, error) {
+func getUser(st modelBackend, tag names.UserTag) (*User, error) {
 	if !tag.IsLocal() {
 		return nil, errors.NotFoundf("user %q", tag.Id())
 	}
 	user := &User{st: st}
-	if err := st.getUser(tag.Name(), &user.doc); err != nil {
+	if err := loadUser(st, tag.Name(), &user.doc); err != nil {
 		return nil, errors.Trace(err)
 	}
 	if user.doc.Deleted {
@@ -216,6 +215,11 @@ func (st *State) User(tag names.UserTag) (*User, error) {
 		return nil, DeletedUserError{UserName: user.Name()}
 	}
 	return user, nil
+}
+
+// User returns the state User for the given name.
+func (st *State) User(tag names.UserTag) (*User, error) {
+	return getUser(st, tag)
 }
 
 // AllUsers returns a slice of state.User. This includes all active users. If
@@ -264,7 +268,7 @@ func (st *State) AllUsers(includeDeactivated bool) ([]*User, error) {
 
 // User represents a local user in the database.
 type User struct {
-	st           *State
+	st           modelBackend
 	doc          userDoc
 	lastLoginDoc userLastLoginDoc
 }
@@ -335,11 +339,13 @@ func (u *User) UserTag() names.UserTag {
 // normal case, the LastLogin is the last time that the user connected through
 // the API server.
 func (u *User) LastLogin() (time.Time, error) {
-	lastLogins, closer := u.st.getRawCollection(userLastLoginC)
+	lastLogins, closer := u.st.db().GetCollection(userLastLoginC)
 	defer closer()
 
+	lastLoginsRaw := lastLogins.Writeable().Underlying()
+
 	var lastLogin userLastLoginDoc
-	err := lastLogins.FindId(u.doc.DocID).Select(bson.D{{"last-login", 1}}).One(&lastLogin)
+	err := lastLoginsRaw.FindId(u.doc.DocID).Select(bson.D{{"last-login", 1}}).One(&lastLogin)
 	if err != nil {
 		if err == mgo.ErrNotFound {
 			err = errors.Wrap(err, NeverLoggedInError(u.UserTag().Name()))
@@ -391,8 +397,8 @@ func (u *User) UpdateLastLogin() (err error) {
 
 	lastLogin := userLastLoginDoc{
 		DocID:     u.doc.DocID,
-		ModelUUID: u.st.ModelUUID(),
-		LastLogin: u.st.NowToTheSecond(),
+		ModelUUID: u.st.uuid(),
+		LastLogin: u.st.modelClock().Now().Round(time.Second).UTC(),
 	}
 
 	_, err = lastLoginsW.UpsertId(lastLogin.DocID, lastLogin)
@@ -440,7 +446,7 @@ func (u *User) SetPasswordHash(pwHash string, pwSalt string) error {
 		Assert: txn.DocExists,
 		Update: update,
 	}}
-	if err := u.st.runTransaction(ops); err != nil {
+	if err := u.st.db().RunTransaction(ops); err != nil {
 		return errors.Annotatef(err, "cannot set password of user %q", u.Name())
 	}
 	u.doc.PasswordHash = pwHash
@@ -469,7 +475,7 @@ func (u *User) PasswordValid(password string) bool {
 // Refresh refreshes information about the User from the state.
 func (u *User) Refresh() error {
 	var udoc userDoc
-	if err := u.st.getUser(u.Name(), &udoc); err != nil {
+	if err := loadUser(u.st, u.Name(), &udoc); err != nil {
 		return err
 	}
 	u.doc = udoc
@@ -481,6 +487,9 @@ func (u *User) Disable() error {
 	if err := u.ensureNotDeleted(); err != nil {
 		return errors.Annotate(err, "cannot disable")
 	}
+	// XXX it is difficult to get the controller model from a CAAS model,
+	// so skip this check for now...
+	/*
 	environment, err := u.st.ControllerModel()
 	if err != nil {
 		return errors.Trace(err)
@@ -488,6 +497,7 @@ func (u *User) Disable() error {
 	if u.doc.Name == environment.Owner().Name() {
 		return errors.Unauthorizedf("cannot disable controller model owner")
 	}
+	*/
 	return errors.Annotatef(u.setDeactivated(true), "cannot disable user %q", u.Name())
 }
 
@@ -506,7 +516,7 @@ func (u *User) setDeactivated(value bool) error {
 		Assert: txn.DocExists,
 		Update: bson.D{{"$set", bson.D{{"deactivated", value}}}},
 	}}
-	if err := u.st.runTransaction(ops); err != nil {
+	if err := u.st.db().RunTransaction(ops); err != nil {
 		if err == txn.ErrAborted {
 			err = fmt.Errorf("user no longer exists")
 		}

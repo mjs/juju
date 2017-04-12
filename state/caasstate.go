@@ -142,6 +142,22 @@ func (st *CAASState) Close() error {
 	return nil
 }
 
+// FindEntity returns the entity with the given tag.
+//
+// The returned value can be of type *User or *Application, depending
+// on the tag.
+func (st *CAASState) FindEntity(tag names.Tag) (Entity, error) {
+	id := tag.Id()
+	switch tag := tag.(type) {
+	case names.UserTag:
+		return st.User(tag)
+	case names.ApplicationTag:
+		return st.CAASApplication(id)
+	default:
+		return nil, errors.Errorf("unsupported tag %T", tag)
+	}
+}
+
 // modelSetupOps returns the transactions necessary to set up a CAAS model.
 func (st *CAASState) modelSetupOps(modelUUID, controllerUUID string, args CAASModelArgs) ([]txn.Op, error) {
 	/* XXX
@@ -306,6 +322,11 @@ func (st *CAASState) ModelConfig() (*config.Config, error) {
 		return nil, errors.Trace(err)
 	}
 	return config.New(config.NoDefaults, modelSettings.Map())
+}
+
+// User returns the state User for the given name.
+func (st *CAASState) User(tag names.UserTag) (*User, error) {
+	return getUser(st, tag)
 }
 
 func (st *CAASState) UpdateUploadedCharm(info CharmInfo) (*Charm, error) {
