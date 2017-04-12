@@ -85,8 +85,12 @@ func (ctxt *httpContext) stateForRequestAuthenticated(r *http.Request) (
 	}
 
 	if st.IsCAAS() {
-		// XXX Just fake it for the prototype for now.
-		entity, err := ctxt.srv.state.User(names.NewUserTag("admin"))
+		// XXX For now, just fake authentication for the prototype.
+		authTag, err := names.ParseTag(req.AuthTag)
+		if err != nil {
+			return nil, nil, nil, errors.Trace(err)
+		}
+		entity, err := st.CAASState().FindEntity(authTag)
 		if err != nil {
 			return nil, nil, nil, errors.Trace(err)
 		}
