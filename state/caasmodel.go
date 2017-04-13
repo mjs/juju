@@ -180,6 +180,22 @@ func (m *CAASModel) Type() string {
 	return "caas"
 }
 
+func (m *CAASModel) Endpoint() string {
+	return m.doc.Endpoint
+}
+
+func (m *CAASModel) CertData() []byte {
+	return m.doc.CertData
+}
+
+func (m *CAASModel) KeyData() []byte {
+	return m.doc.KeyData
+}
+
+func (m *CAASModel) CAData() []byte {
+	return m.doc.CAData
+}
+
 func (m *CAASModel) Refresh() error {
 	models, closer := m.st.db().GetCollection(caasModelsC)
 	defer closer()
