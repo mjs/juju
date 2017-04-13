@@ -72,6 +72,8 @@ func deployOperator(client *kubernetes.Clientset, appName string) error {
 				Name:            "juju-operator",
 				Image:           "mikemccracken/caasoperator",
 				ImagePullPolicy: v1.PullAlways,
+				// XXX populate this with creds and Juju API endpoints
+				// Args:            []string{"caasoperator", "--name", appName},
 			}},
 		},
 	}
