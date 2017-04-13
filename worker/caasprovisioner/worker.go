@@ -58,6 +58,10 @@ func (p *provisioner) loop() error {
 		return errors.Annotate(err, "creating k8s client")
 	}
 
+	// XXX this loop should also keep an eye on kubernetes and ensure
+	// that the operator stays up, redeploying it if the pod goes
+	// away. For some runtimes we *could* rely on the the runtime's
+	// features to do this.
 	w := st.WatchApplications()
 	p.catacomb.Add(w)
 	for {
