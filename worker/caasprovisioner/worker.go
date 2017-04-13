@@ -46,21 +46,30 @@ func (p *provisioner) Wait() error {
 func (p *provisioner) loop() error {
 	st, err := p.newState()
 	if err != nil {
-		return errors.Trace(err)
+		return errors.Annotate(err, "opening state")
 	}
 	defer st.Close()
 
+	// XXX this assumes the k8s credentials never change. This is fine
+	// for the prototype but needs to be considered for any real
+	// implementation.
+	client, err := newK8sClient(st)
+	if err != nil {
+		return errors.Annotate(err, "creating k8s client")
+	}
+
 	w := st.WatchApplications()
 	p.catacomb.Add(w)
-
 	for {
 		select {
 		case apps := <-w.Changes():
 			for _, app := range apps {
-				// XXX do something useful here - will need to track
-				// already done work (see how the pre-existing
-				// provisioner does it)
 				logger.Infof("saw app: %s", app)
+				if err := ensureOperator(client, app); err != nil {
+					// XXX need retry logic rather than just giving up
+					// (see queue concept in storage provisioner)
+					return errors.Trace(err)
+				}
 			}
 		case <-p.catacomb.Dying():
 			return p.catacomb.ErrDying()
