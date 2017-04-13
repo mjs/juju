@@ -490,13 +490,13 @@ func (u *User) Disable() error {
 	// XXX it is difficult to get the controller model from a CAAS model,
 	// so skip this check for now...
 	/*
-	environment, err := u.st.ControllerModel()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if u.doc.Name == environment.Owner().Name() {
-		return errors.Unauthorizedf("cannot disable controller model owner")
-	}
+		environment, err := u.st.ControllerModel()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if u.doc.Name == environment.Owner().Name() {
+			return errors.Unauthorizedf("cannot disable controller model owner")
+		}
 	*/
 	return errors.Annotatef(u.setDeactivated(true), "cannot disable user %q", u.Name())
 }
