@@ -321,6 +321,10 @@ func (st *State) ForCAASModel(modelTag names.ModelTag) (*CAASState, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	if err := newSt.start(); err != nil {
+		newSt.Close()
+		return nil, errors.Trace(err)
+	}
 	return newSt, nil
 }
 

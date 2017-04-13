@@ -62,7 +62,7 @@ func (st *CAASState) db() Database {
 }
 
 func (st *CAASState) txnLogWatcher() *watcher.Watcher {
-	panic("not implemented")
+	return st.workers.txnLogWatcher()
 }
 
 func (st *CAASState) newStorage() storage.Storage {
