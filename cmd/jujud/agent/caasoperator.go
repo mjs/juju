@@ -43,7 +43,7 @@ type CaasOperatorAgent struct {
 	tomb tomb.Tomb
 	AgentConf
 	configChangedVal *voyeur.Value
-	CaasOperatorName string
+	ApplicationName  string
 	runner           *worker.Runner
 	bufferedLogger   *logsender.BufferedLogWriter
 	setupLogging     func(agent.Config) error
@@ -88,7 +88,7 @@ func (op *CaasOperatorAgent) Info() *cmd.Info {
 
 func (op *CaasOperatorAgent) SetFlags(f *gnuflag.FlagSet) {
 	op.AgentConf.AddFlags(f)
-	f.StringVar(&op.CaasOperatorName, "caasoperator-name", "", "name of the operator to run")
+	f.StringVar(&op.ApplicationName, "application-name", "", "name of the application")
 	f.BoolVar(&op.logToStdErr, "log-to-stderr", false, "whether to log to standard error instead of log files")
 }
 
@@ -183,7 +183,7 @@ func (op *CaasOperatorAgent) APIWorkers() (worker.Worker, error) {
 }
 
 func (op *CaasOperatorAgent) Tag() names.Tag {
-	return names.NewApplicationTag(op.CaasOperatorName)
+	return names.NewApplicationTag(op.ApplicationName)
 }
 
 func (op *CaasOperatorAgent) ChangeConfig(mutate agent.ConfigMutator) error {
@@ -195,7 +195,7 @@ func (op *CaasOperatorAgent) ChangeConfig(mutate agent.ConfigMutator) error {
 // validateMigration is called by the migrationminion to help check
 // that the agent will be ok when connected to a new controller.
 func (op *CaasOperatorAgent) validateMigration(apiCaller base.APICaller) error {
-	// unitTag := names.NewUnitTag(op.CaasOperatorName)
+	// unitTag := names.NewUnitTag(op.ApplicationName)
 	// facade := uniter.NewState(apiCaller, unitTag)
 	// _, err := facade.Unit(unitTag)
 	// if err != nil {
