@@ -33,3 +33,11 @@ func (st *State) ControllerConfig() (jujucontroller.Config, error) {
 	}
 	return settings.Map(), nil
 }
+
+func (st *CAASState) ControllerConfig() (jujucontroller.Config, error) {
+	settings, err := readSettings(st, controllersC, controllerSettingsGlobalKey)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return settings.Map(), nil
+}

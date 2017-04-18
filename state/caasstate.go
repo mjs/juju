@@ -109,8 +109,16 @@ func (st *CAASState) ControllerUUID() string {
 	return st.controllerTag.Id()
 }
 
+func (st *CAASState) ControllerTag() names.ControllerTag {
+	return st.controllerTag
+}
+
 func (st *CAASState) ModelUUID() string {
 	return st.modelTag.Id()
+}
+
+func (st *CAASState) ModelTag() names.ModelTag {
+	return st.modelTag
 }
 
 func (st *CAASState) CAASModel() (*CAASModel, error) {
@@ -122,10 +130,6 @@ func (st *CAASState) CAASModel() (*CAASModel, error) {
 		return nil, errors.Trace(err)
 	}
 	return model, nil
-}
-
-func (st *CAASState) ModelTag() names.ModelTag {
-	return st.modelTag
 }
 
 func (st *CAASState) MongoSession() *mgo.Session {
