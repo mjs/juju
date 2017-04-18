@@ -132,8 +132,16 @@ func (st *State) SetAPIHostPorts(netHostsPorts [][]network.HostPort) error {
 
 // APIHostPorts returns the API addresses as set by SetAPIHostPorts.
 func (st *State) APIHostPorts() ([][]network.HostPort, error) {
+	return getAPIHostPorts(st)
+}
+
+func (st *CAASState) APIHostPorts() ([][]network.HostPort, error) {
+	return getAPIHostPorts(st)
+}
+
+func getAPIHostPorts(backend modelBackend) ([][]network.HostPort, error) {
 	var doc apiHostPortsDoc
-	controllers, closer := st.db().GetCollection(controllersC)
+	controllers, closer := backend.db().GetCollection(controllersC)
 	defer closer()
 	err := controllers.Find(bson.D{{"_id", apiHostPortsKey}}).One(&doc)
 	if err != nil {
