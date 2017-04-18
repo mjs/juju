@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: juju-caasoperator-v0
+  namespace: default
+  labels:
+    k8s-app: juju-caasoperator
+    version: v0
+spec:
+  replicas: 1
+  selector:
+    k8s-app: juju-caasoperator
+    version: v0
+  template:
+    metadata:
+      labels:
+        k8s-app: juju-caasoperator
+        version: v0
+    spec:
+      containers:
+        - name: caasoperator
+          image: index.docker.io/mikemccracken/caasoperator:latest
+          imagePullPolicy: Always
+      imagePullSecrets:
+        - name: dockerhubkey
