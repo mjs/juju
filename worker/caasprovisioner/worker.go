@@ -69,9 +69,10 @@ func (p *provisioner) loop() error {
 		case apps := <-w.Changes():
 			for _, app := range apps {
 				logger.Infof("saw app: %s", app)
-				if err := ensureOperator(client, app); err != nil {
+				if err := ensureOperator(client, app, st); err != nil {
 					// XXX need retry logic rather than just giving up
 					// (see queue concept in storage provisioner)
+					logger.Errorf("ensure failed: %v", err)
 					return errors.Trace(err)
 				}
 			}
