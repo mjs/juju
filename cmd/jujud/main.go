@@ -181,6 +181,12 @@ func jujuDMain(args []string, ctx *cmd.Context) (code int, err error) {
 
 	jujud.Register(NewUpgradeMongoCommand())
 
+	caasOperatorAgent, err := agentcmd.NewCaasOperatorAgent(ctx, bufferedLogger)
+	if err != nil {
+		return -1, errors.Trace(err)
+	}
+	jujud.Register(caasOperatorAgent)
+
 	code = cmd.Main(jujud, ctx, args[1:])
 	return code, nil
 }

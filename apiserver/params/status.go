@@ -255,6 +255,12 @@ type ApplicationStatusResult struct {
 	Error       *Error                  `json:"error,omitempty"`
 }
 
+type CAASApplicationStatusResult struct {
+	Application   StatusResult            `json:"application"`
+	Caasoperators map[string]StatusResult `json:"caasoperators"`
+	Error         *Error                  `json:"error,omitempty"`
+}
+
 // ApplicationStatusResults holds multiple StatusResult.
 type ApplicationStatusResults struct {
 	Results []ApplicationStatusResult `json:"results"`
