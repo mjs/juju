@@ -11,10 +11,7 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/rest"
 
-	"github.com/juju/juju/agent"
-	"github.com/juju/juju/network"
 	"github.com/juju/juju/state"
-	"github.com/juju/juju/version"
 )
 
 // XXX should be using a juju specific namespace
@@ -44,7 +41,9 @@ func newK8sConfig(model *state.CAASModel) *rest.Config {
 	}
 }
 
-func ensureOperator(client *kubernetes.Clientset, appName string, st *state.CAASState) error {
+type newConfigFunc func(appName string) ([]byte, error)
+
+func ensureOperator(client *kubernetes.Clientset, appName string, newConfig newConfigFunc) error {
 	if exists, err := operatorExists(client, appName); err != nil {
 		return errors.Trace(err)
 	} else if exists {
@@ -53,11 +52,53 @@ func ensureOperator(client *kubernetes.Clientset, appName string, st *state.CAAS
 	}
 	logger.Infof("deploying %s operator", appName)
 
-	config, err := newOperatorConfig(appName, st)
+	configMapName, err := ensureConfigMap(client, appName, newConfig)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	return deployOperator(client, appName, config)
+
+	return deployOperator(client, appName, configMapName)
+}
+
+func ensureConfigMap(client *kubernetes.Clientset, appName string, newConfig newConfigFunc) (string, error) {
+	mapName := podName(appName) + "-config"
+
+	exists, err := configMapExists(client, mapName)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	if !exists {
+		config, err := newConfig(appName)
+		if err != nil {
+			return "", errors.Annotate(err, "creating config")
+		}
+		if err := createConfigMap(client, mapName, config); err != nil {
+			return "", errors.Annotate(err, "creating ConfigMap")
+		}
+	}
+	return mapName, nil
+}
+
+func configMapExists(client *kubernetes.Clientset, configMapName string) (bool, error) {
+	_, err := client.CoreV1().ConfigMaps(namespace).Get(configMapName)
+	if k8serrors.IsNotFound(err) {
+		return false, nil
+	} else if err != nil {
+		return false, errors.Trace(err)
+	}
+	return true, nil
+}
+
+func createConfigMap(client *kubernetes.Clientset, configMapName string, config []byte) error {
+	_, err := client.ConfigMaps(namespace).Create(&v1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Name: configMapName,
+		},
+		Data: map[string]string{
+			"agent.conf": string(config),
+		},
+	})
+	return errors.Trace(err)
 }
 
 func operatorExists(client *kubernetes.Clientset, appName string) (bool, error) {
@@ -70,21 +111,8 @@ func operatorExists(client *kubernetes.Clientset, appName string) (bool, error) 
 	return true, nil
 }
 
-func deployOperator(client *kubernetes.Clientset, appName string, config []byte) error {
-	configMapName := podName(appName) + "-config"
+func deployOperator(client *kubernetes.Clientset, appName string, configMapName string) error {
 	configVolName := configMapName + "-volume"
-
-	_, err := client.ConfigMaps(namespace).Create(&v1.ConfigMap{
-		ObjectMeta: v1.ObjectMeta{
-			Name: configMapName,
-		},
-		Data: map[string]string{
-			"agent.conf": string(config),
-		},
-	})
-	if err != nil {
-		return errors.Trace(err)
-	}
 
 	appTag := names.NewApplicationTag(appName)
 	spec := &v1.Pod{
@@ -115,72 +143,10 @@ func deployOperator(client *kubernetes.Clientset, appName string, config []byte)
 			}},
 		},
 	}
-	_, err = client.CoreV1().Pods(namespace).Create(spec)
+	_, err := client.CoreV1().Pods(namespace).Create(spec)
 	return errors.Trace(err)
 }
 
 func podName(appName string) string {
 	return "juju-operator-" + appName
-}
-
-func newOperatorConfig(appName string, st *state.CAASState) ([]byte, error) {
-	appTag := names.NewApplicationTag(appName)
-
-	apiAddrs, err := apiAddresses(st)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	controllerCfg, err := st.ControllerConfig()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	caCert, ok := controllerCfg.CACert()
-	if !ok {
-		return nil, errors.New("missing ca cert in controller config")
-	}
-
-	conf, err := agent.NewAgentConfig(
-		agent.AgentConfigParams{
-			Paths: agent.Paths{
-				// XXX shouldn't be hardcoded
-				DataDir: "/var/lib/juju",
-				LogDir:  "/var/log/juju",
-			},
-			// This isn't actually used but needs to be supplied.
-			UpgradedToVersion: version.Current,
-			Tag:               appTag,
-			Password:          "XXX not currently checked",
-			Controller:        st.ControllerTag(),
-			Model:             st.ModelTag(),
-			APIAddresses:      apiAddrs,
-			CACert:            caCert,
-		},
-	)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	confBytes, err := conf.Render()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return confBytes, nil
-}
-
-func apiAddresses(st *state.CAASState) ([]string, error) {
-	apiHostPorts, err := st.APIHostPorts()
-	if err != nil {
-		return nil, err
-	}
-	var addrs = make([]string, 0, len(apiHostPorts))
-	for _, hostPorts := range apiHostPorts {
-		ordered := network.PrioritizeInternalHostPorts(hostPorts, false)
-		for _, addr := range ordered {
-			if addr != "" {
-				addrs = append(addrs, addr)
-			}
-		}
-	}
-	return addrs, nil
 }
