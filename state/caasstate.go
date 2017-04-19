@@ -12,6 +12,7 @@ import (
 	"gopkg.in/juju/names.v2"
 	"gopkg.in/juju/worker.v1"
 	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 	"gopkg.in/mgo.v2/txn"
 
 	"github.com/juju/juju/environs/config"
@@ -333,6 +334,10 @@ func (st *CAASState) User(tag names.UserTag) (*User, error) {
 	return getUser(st, tag)
 }
 
+func (st *CAASState) LatestPlaceholderCharm(curl *charm.URL) (*Charm, error) {
+	return latestPlaceholderCharm(st, curl)
+}
+
 func (st *CAASState) UpdateUploadedCharm(info CharmInfo) (*Charm, error) {
 	return updateUploadedCharm(st, info)
 }
@@ -392,4 +397,20 @@ func (st *CAASState) CAASUnit(name string) (*CAASUnit, error) {
 		return nil, errors.Annotatef(err, "cannot get unit %q", name)
 	}
 	return newCAASUnit(st, &doc), nil
+}
+
+// AllCAASApplications returns all deployed CAAS applications in the model.
+func (st *CAASState) AllCAASApplications() ([]*CAASApplication, error) {
+	applications, closer := st.db().GetCollection(caasApplicationsC)
+	defer closer()
+
+	sdocs := []caasApplicationDoc{}
+	if err := applications.Find(bson.D{}).All(&sdocs); err != nil {
+		return nil, errors.Errorf("cannot get all applications")
+	}
+	var caasApps []*CAASApplication
+	for _, v := range sdocs {
+		caasApps = append(caasApps, newCAASApplication(st, &v))
+	}
+	return caasApps, nil
 }

@@ -17,9 +17,15 @@ import (
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/cmd/modelcmd"
 	"github.com/juju/juju/juju/osenv"
+	"github.com/juju/juju/jujuclient"
 )
 
 var logger = loggo.GetLogger("juju.cmd.juju.status")
+
+type caasStatusAPI interface {
+	Status(patterns []string) (*params.CAASStatus, error)
+	Close() error
+}
 
 type statusAPI interface {
 	Status(patterns []string) (*params.FullStatus, error)
@@ -133,7 +139,65 @@ var newAPIClientForStatus = func(c *statusCommand) (statusAPI, error) {
 	return c.NewAPIClient()
 }
 
+var newAPICAASClientForStatus = func(c *statusCommand) (caasStatusAPI, error) {
+	return c.NewAPICAASClient()
+}
+
 func (c *statusCommand) Run(ctx *cmd.Context) error {
+	store := c.ClientStore()
+	modelDetails, err := store.ModelByName(
+		c.ControllerName(),
+		c.ModelName(),
+	)
+	if errors.IsNotFound(err) {
+		if err := c.RefreshModels(store, c.ControllerName()); err != nil {
+			return errors.Annotate(err, "refreshing models cache")
+		}
+		// Now try again.
+		modelDetails, err = store.ModelByName(
+			c.ControllerName(),
+			c.ModelName(),
+		)
+	}
+	if err != nil {
+		return errors.Annotate(err, "getting model details")
+	}
+
+	if modelDetails.Type == jujuclient.CAASModel {
+		return c.caasStatus(ctx)
+	} else {
+		return c.iaasStatus(ctx)
+	}
+}
+
+func (c *statusCommand) caasStatus(ctx *cmd.Context) error {
+	apiclient, err := newAPICAASClientForStatus(c)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer apiclient.Close()
+
+	status, err := apiclient.Status(c.patterns)
+	if err != nil {
+		if status == nil {
+			// Status call completely failed, there is nothing to report
+			return err
+		}
+		// Display any error, but continue to print status if some was returned
+		fmt.Fprintf(ctx.Stderr, "%v\n", err)
+	} else if status == nil {
+		return errors.Errorf("unable to obtain the current status")
+	}
+
+	formatter := newCAASStatusFormatter(status, c.ControllerName(), c.isoTime)
+	formatted, err := formatter.format()
+	if err != nil {
+		return err
+	}
+	return c.out.Write(ctx, formatted)
+}
+
+func (c *statusCommand) iaasStatus(ctx *cmd.Context) error {
 	apiclient, err := newAPIClientForStatus(c)
 	if err != nil {
 		return errors.Trace(err)

@@ -50,7 +50,7 @@ func (sf *statusFormatter) format() (formattedStatus, error) {
 	if err != nil {
 		return formattedStatus{}, err
 	}
-	out := formattedStatus{
+	out := &formattedIAASStatus{
 		Model: modelStatus{
 			Name:             sf.status.Model.Name,
 			Controller:       sf.controllerName,
@@ -80,7 +80,7 @@ func (sf *statusFormatter) format() (formattedStatus, error) {
 	for sn, s := range sf.status.RemoteApplications {
 		out.RemoteApplications[sn] = sf.formatRemoteApplication(sn, s)
 	}
-	return out, nil
+	return formattedStatus{iaasStatus: out}, nil
 }
 
 // MachineFormat takes stored model information (params.FullStatus) and formats machine status info.

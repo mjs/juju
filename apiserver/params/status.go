@@ -274,3 +274,49 @@ const (
 	Dying Life = "dying"
 	Dead  Life = "dead"
 )
+
+// CAASStatus holds information about the status of a juju CAAS model.
+type CAASStatus struct {
+	Model        CAASModelStatusInfo              `json:"model"`
+	Applications map[string]CAASApplicationStatus `json:"applications"`
+	Relations    []RelationStatus                 `json:"relations"`
+}
+
+// CAASModelStatusInfo holds status information about the model itself.
+type CAASModelStatusInfo struct {
+	Name             string         `json:"name"`
+	CloudTag         string         `json:"cloud-tag"`
+	CloudRegion      string         `json:"region,omitempty"`
+	Version          string         `json:"version"`
+	AvailableVersion string         `json:"available-version"`
+	ModelStatus      DetailedStatus `json:"model-status"`
+}
+
+// CAASApplicationStatus holds status info about an application.
+type CAASApplicationStatus struct {
+	Err             error                     `json:"err,omitempty"`
+	Charm           string                    `json:"charm"`
+	Life            string                    `json:"life"`
+	Relations       map[string][]string       `json:"relations"`
+	CanUpgradeTo    string                    `json:"can-upgrade-to"`
+	SubordinateTo   []string                  `json:"subordinate-to"`
+	Units           map[string]CAASUnitStatus `json:"units"`
+	Status          DetailedStatus            `json:"status"`
+	WorkloadVersion string                    `json:"workload-version"`
+}
+
+// UnitStatus holds status info about a unit.
+type CAASUnitStatus struct {
+	// AgentStatus holds the status for a unit's agent.
+	AgentStatus DetailedStatus `json:"agent-status"`
+
+	// WorkloadStatus holds the status for a unit's workload.
+	WorkloadStatus  DetailedStatus `json:"workload-status"`
+	WorkloadVersion string         `json:"workload-version"`
+
+	Machine       string   `json:"machine"`
+	OpenedPorts   []string `json:"opened-ports"`
+	PublicAddress string   `json:"public-address"`
+	Charm         string   `json:"charm"`
+	Leader        bool     `json:"leader,omitempty"`
+}

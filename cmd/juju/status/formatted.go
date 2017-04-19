@@ -14,6 +14,30 @@ import (
 )
 
 type formattedStatus struct {
+	caasStatus *formattedCAASStatus
+	iaasStatus *formattedIAASStatus
+}
+
+func (fs formattedStatus) MarshalJSON() ([]byte, error) {
+	if fs.caasStatus != nil {
+		return json.Marshal(fs.caasStatus)
+	}
+	return json.Marshal(fs.iaasStatus)
+}
+
+func (fs formattedStatus) MarshalYAML() (interface{}, error) {
+	if fs.caasStatus != nil {
+		return fs.caasStatus, nil
+	}
+	return fs.iaasStatus, nil
+}
+
+type formattedCAASStatus struct {
+	Model        modelStatus                      `json:"model"`
+	Applications map[string]caasApplicationStatus `json:"applications"`
+}
+
+type formattedIAASStatus struct {
 	Model              modelStatus                        `json:"model"`
 	Machines           map[string]machineStatus           `json:"machines"`
 	Applications       map[string]applicationStatus       `json:"applications"`
@@ -118,6 +142,37 @@ func (s applicationStatus) MarshalYAML() (interface{}, error) {
 	return applicationStatusNoMarshal(s), nil
 }
 
+type caasApplicationStatus struct {
+	Err           error                     `json:"-" yaml:",omitempty"`
+	Charm         string                    `json:"charm" yaml:"charm"`
+	CharmOrigin   string                    `json:"charm-origin" yaml:"charm-origin"`
+	CharmName     string                    `json:"charm-name" yaml:"charm-name"`
+	CharmRev      int                       `json:"charm-rev" yaml:"charm-rev"`
+	CanUpgradeTo  string                    `json:"can-upgrade-to,omitempty" yaml:"can-upgrade-to,omitempty"`
+	Life          string                    `json:"life,omitempty" yaml:"life,omitempty"`
+	StatusInfo    statusInfoContents        `json:"application-status,omitempty" yaml:"application-status"`
+	Relations     map[string][]string       `json:"relations,omitempty" yaml:"relations,omitempty"`
+	SubordinateTo []string                  `json:"subordinate-to,omitempty" yaml:"subordinate-to,omitempty"`
+	Units         map[string]caasUnitStatus `json:"units,omitempty" yaml:"units,omitempty"`
+	Version       string                    `json:"version,omitempty" yaml:"version,omitempty"`
+}
+
+type caasApplicationStatusNoMarshal caasApplicationStatus
+
+func (s caasApplicationStatus) MarshalJSON() ([]byte, error) {
+	if s.Err != nil {
+		return json.Marshal(errorStatus{s.Err.Error()})
+	}
+	return json.Marshal(caasApplicationStatusNoMarshal(s))
+}
+
+func (s caasApplicationStatus) MarshalYAML() (interface{}, error) {
+	if s.Err != nil {
+		return errorStatus{s.Err.Error()}, nil
+	}
+	return caasApplicationStatusNoMarshal(s), nil
+}
+
 type remoteEndpoint struct {
 	Interface string `json:"interface" yaml:"interface"`
 	Role      string `json:"role" yaml:"role"`
@@ -153,6 +208,18 @@ type meterStatus struct {
 	Message string `json:"message,omitempty" yaml:"message,omitempty"`
 }
 
+type caasUnitStatus struct {
+	// New Juju Health Status fields.
+	WorkloadStatusInfo statusInfoContents `json:"workload-status,omitempty" yaml:"workload-status"`
+	JujuStatusInfo     statusInfoContents `json:"juju-status,omitempty" yaml:"juju-status"`
+	MeterStatus        *meterStatus       `json:"meter-status,omitempty" yaml:"meter-status,omitempty"`
+
+	Leader        bool     `json:"leader,omitempty" yaml:"leader,omitempty"`
+	Charm         string   `json:"upgrading-from,omitempty" yaml:"upgrading-from,omitempty"`
+	OpenedPorts   []string `json:"open-ports,omitempty" yaml:"open-ports,omitempty"`
+	PublicAddress string   `json:"public-address,omitempty" yaml:"public-address,omitempty"`
+}
+
 type unitStatus struct {
 	// New Juju Health Status fields.
 	WorkloadStatusInfo statusInfoContents `json:"workload-status,omitempty" yaml:"workload-status"`
@@ -167,7 +234,30 @@ type unitStatus struct {
 	Subordinates  map[string]unitStatus `json:"subordinates,omitempty" yaml:"subordinates,omitempty"`
 }
 
-func (s *formattedStatus) applicationScale(name string) (string, bool) {
+func (s *formattedCAASStatus) applicationScale(name string) (string, bool) {
+	// The current unit count are units that are either in Idle or Executing status.
+	// In other words, units that are active and available.
+	currentUnitCount := 0
+	desiredUnitCount := 0
+
+	app := s.Applications[name]
+	match := func(u caasUnitStatus) {
+		desiredUnitCount += 1
+		switch u.JujuStatusInfo.Current {
+		case status.Executing, status.Idle:
+			currentUnitCount += 1
+		}
+	}
+	for _, u := range app.Units {
+		match(u)
+	}
+	if currentUnitCount == desiredUnitCount {
+		return fmt.Sprint(currentUnitCount), false
+	}
+	return fmt.Sprintf("%d/%d", currentUnitCount, desiredUnitCount), true
+}
+
+func (s *formattedIAASStatus) applicationScale(name string) (string, bool) {
 	// The current unit count are units that are either in Idle or Executing status.
 	// In other words, units that are active and available.
 	currentUnitCount := 0
