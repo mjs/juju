@@ -202,6 +202,14 @@ func (c *ModelCommandBase) NewAPIClient() (*api.Client, error) {
 	return root.Client(), nil
 }
 
+func (c *ModelCommandBase) NewAPICAASClient() (*api.CAASClient, error) {
+	root, err := c.NewAPIRoot()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return root.CAASClient(), nil
+}
+
 // NewAPIRoot returns a new connection to the API server for the environment
 // directed to the model specified on the command line.
 func (c *ModelCommandBase) NewAPIRoot() (api.Connection, error) {

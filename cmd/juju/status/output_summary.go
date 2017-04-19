@@ -37,9 +37,14 @@ func FormatSummary(writer io.Writer, value interface{}) error {
 		return errors.Errorf("expected value of type %T, got %T", fs, value)
 	}
 
+	if fs.caasStatus != nil {
+		return errors.Errorf("formatting for CAAS status is unimplemented")
+	}
+	fis := fs.iaasStatus
+
 	f := newSummaryFormatter(writer)
-	stateToMachine := f.aggregateMachineStates(fs.Machines)
-	svcExposure := f.aggregateServiceAndUnitStates(fs.Applications)
+	stateToMachine := f.aggregateMachineStates(fis.Machines)
+	svcExposure := f.aggregateServiceAndUnitStates(fis.Applications)
 	p := f.delimitValuesWithTabs
 
 	// Print everything out
@@ -49,7 +54,7 @@ func FormatSummary(writer io.Writer, value interface{}) error {
 
 	// Right align summary information
 	f.tw.Init(writer, 0, 1, 2, ' ', tabwriter.AlignRight)
-	p("# Machines:", fmt.Sprintf("(%d)", len(fs.Machines)))
+	p("# Machines:", fmt.Sprintf("(%d)", len(fis.Machines)))
 	f.printStateToCount(stateToMachine)
 	p(" ")
 
@@ -57,16 +62,16 @@ func FormatSummary(writer io.Writer, value interface{}) error {
 	f.printStateToCount(f.stateToUnit)
 	p(" ")
 
-	p("# Applications:", fmt.Sprintf("(%d)", len(fs.Applications)))
+	p("# Applications:", fmt.Sprintf("(%d)", len(fis.Applications)))
 	for _, svcName := range utils.SortStringsNaturally(stringKeysFromMap(svcExposure)) {
 		s := svcExposure[svcName]
 		p(svcName, fmt.Sprintf("%d/%d\texposed", s[true], s[true]+s[false]))
 	}
 	p(" ")
 
-	p("# Remote:", fmt.Sprintf("(%d)", len(fs.RemoteApplications)))
-	for _, svcName := range utils.SortStringsNaturally(stringKeysFromMap(fs.RemoteApplications)) {
-		s := fs.RemoteApplications[svcName]
+	p("# Remote:", fmt.Sprintf("(%d)", len(fis.RemoteApplications)))
+	for _, svcName := range utils.SortStringsNaturally(stringKeysFromMap(fis.RemoteApplications)) {
+		s := fis.RemoteApplications[svcName]
 		p(svcName, "", s.ApplicationURL)
 	}
 	f.tw.Flush()
