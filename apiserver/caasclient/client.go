@@ -9,7 +9,6 @@ import (
 
 	"github.com/juju/juju/apiserver/common"
 	"github.com/juju/juju/apiserver/facade"
-	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/permission"
 	"github.com/juju/juju/state"
 )
@@ -77,9 +76,4 @@ func NewFacade(ctx facade.Context) (*Client, error) {
 			auth:  authorizer,
 		},
 	}, nil
-}
-
-// Status gives the information needed for juju CAAS status over the API.
-func (c *Client) Status(args params.StatusParams) (params.CAASStatus, error) {
-	return params.CAASStatus{}, errors.Errorf("unimplemented")
 }
