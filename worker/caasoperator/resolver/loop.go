@@ -7,9 +7,9 @@ import (
 	"github.com/juju/errors"
 	"gopkg.in/juju/charm.v6-unstable/hooks"
 
-	"github.com/juju/juju/worker/fortress"
 	"github.com/juju/juju/worker/caasoperator/operation"
 	"github.com/juju/juju/worker/caasoperator/remotestate"
+	"github.com/juju/juju/worker/fortress"
 )
 
 // ErrLoopAborted is used to signal that the loop is exiting because it
