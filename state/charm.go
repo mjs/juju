@@ -615,6 +615,10 @@ func loadCharm(st modelBackend, curl *charm.URL) (*Charm, error) {
 // LatestPlaceholderCharm returns the latest charm described by the
 // given URL but which is not yet deployed.
 func (st *State) LatestPlaceholderCharm(curl *charm.URL) (*Charm, error) {
+	return latestPlaceholderCharm(st, curl)
+}
+
+func latestPlaceholderCharm(st modelBackend, curl *charm.URL) (*Charm, error) {
 	charms, closer := st.db().GetCollection(charmsC)
 	defer closer()
 
