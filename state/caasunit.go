@@ -193,7 +193,7 @@ func (u *CAASUnit) SetAgentVersion(v version.Binary) (err error) {
 	}
 	tools := &tools.Tools{Version: v}
 	ops := []txn.Op{{
-		C:      unitsC,
+		C:      caasUnitsC,
 		Id:     u.doc.DocID,
 		Assert: notDeadDoc,
 		Update: bson.D{{"$set", bson.D{{"tools", tools}}}},
@@ -218,7 +218,7 @@ func (u *CAASUnit) SetPassword(password string) error {
 // manipulation in tests (to check for backwards compatibility).
 func (u *CAASUnit) setPasswordHash(passwordHash string) error {
 	ops := []txn.Op{{
-		C:      unitsC,
+		C:      caasUnitsC,
 		Id:     u.doc.DocID,
 		Assert: notDeadDoc,
 		Update: bson.D{{"$set", bson.D{{"passwordhash", passwordHash}}}},
@@ -315,7 +315,7 @@ func (u *CAASUnit) destroyOps() ([]txn.Op, error) {
 	minUnitsOp := minUnitsTriggerOp(u.st, u.ApplicationName())
 	cleanupOp := newCleanupOp(cleanupDyingUnit, u.doc.Name)
 	setDyingOp := txn.Op{
-		C:      unitsC,
+		C:      caasUnitsC,
 		Id:     u.doc.DocID,
 		Assert: isAliveDoc,
 		Update: bson.D{{"$set", bson.D{{"life", Dying}}}},
@@ -378,7 +378,7 @@ func (u *CAASUnit) EnsureDead() (err error) {
 	}()
 
 	ops := []txn.Op{{
-		C:      unitsC,
+		C:      caasUnitsC,
 		Id:     u.doc.DocID,
 		Assert: notDeadDoc,
 		Update: bson.D{{"$set", bson.D{{"life", Dead}}}},
@@ -386,7 +386,7 @@ func (u *CAASUnit) EnsureDead() (err error) {
 	if err := u.st.runTransaction(ops); err != txn.ErrAborted {
 		return err
 	}
-	if notDead, err := isNotDead(u.st, unitsC, u.doc.DocID); err != nil {
+	if notDead, err := isNotDead(u.st, caasUnitsC, u.doc.DocID); err != nil {
 		return err
 	} else if !notDead {
 		return nil
@@ -709,7 +709,7 @@ func (u *CAASUnit) charm() (*Charm, error) {
 // URL will be checked by the txn.Ops also.
 func (u *CAASUnit) assertCharmOps(ch *Charm) []txn.Op {
 	ops := []txn.Op{{
-		C:      unitsC,
+		C:      caasUnitsC,
 		Id:     u.doc.Name,
 		Assert: bson.D{{"charmurl", u.doc.CharmURL}},
 	}}
@@ -775,7 +775,7 @@ func (u *CAASUnit) SetResolved(mode ResolvedMode) (err error) {
 	// TODO(fwereade): assert unit has error status.
 	resolvedNotSet := bson.D{{"resolved", ResolvedNone}}
 	ops := []txn.Op{{
-		C:      unitsC,
+		C:      caasUnitsC,
 		Id:     u.doc.DocID,
 		Assert: append(notDeadDoc, resolvedNotSet...),
 		Update: bson.D{{"$set", bson.D{{"resolved", mode}}}},
@@ -786,7 +786,7 @@ func (u *CAASUnit) SetResolved(mode ResolvedMode) (err error) {
 	} else if err != txn.ErrAborted {
 		return err
 	}
-	if ok, err := isNotDead(u.st, unitsC, u.doc.DocID); err != nil {
+	if ok, err := isNotDead(u.st, caasUnitsC, u.doc.DocID); err != nil {
 		return err
 	} else if !ok {
 		return ErrDead
@@ -798,7 +798,7 @@ func (u *CAASUnit) SetResolved(mode ResolvedMode) (err error) {
 // ClearResolved removes any resolved setting on the unit.
 func (u *CAASUnit) ClearResolved() error {
 	ops := []txn.Op{{
-		C:      unitsC,
+		C:      caasUnitsC,
 		Id:     u.doc.DocID,
 		Assert: txn.DocExists,
 		Update: bson.D{{"$set", bson.D{{"resolved", ResolvedNone}}}},
@@ -851,7 +851,7 @@ func addCAASUnitOps(st *CAASState, args addCAASUnitOpsArgs) ([]txn.Op, error) {
 	}
 
 	return append(prereqOps, txn.Op{
-		C:      unitsC,
+		C:      caasUnitsC,
 		Id:     name,
 		Assert: txn.DocMissing,
 		Insert: args.caasUnitDoc,
