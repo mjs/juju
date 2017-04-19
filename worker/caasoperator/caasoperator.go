@@ -374,7 +374,7 @@ func (op *CaasOperator) loop(caasoperatortag names.ApplicationTag) (err error) {
 		}
 	}
 
-	logger.Infof("caasoperator %q shutting down: %s", op, err)
+	logger.Infof("caasoperator %p shutting down: %s", op, err)
 	return err
 }
 
