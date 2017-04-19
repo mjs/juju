@@ -38,6 +38,11 @@ func formatOneline(writer io.Writer, value interface{}, printf onelinePrintf) er
 		return errors.Errorf("expected value of type %T, got %T", fs, value)
 	}
 
+	if fs.caasStatus != nil {
+		return errors.Errorf("formatting for CAAS status is unimplemented")
+	}
+	fis := fs.iaasStatus
+
 	pprint := func(uName string, u unitStatus, level int) {
 		var fmtPorts string
 		if len(u.OpenedPorts) > 0 {
@@ -47,8 +52,8 @@ func formatOneline(writer io.Writer, value interface{}, printf onelinePrintf) er
 		printf(writer, format, uName, u, level)
 	}
 
-	for _, svcName := range utils.SortStringsNaturally(stringKeysFromMap(fs.Applications)) {
-		svc := fs.Applications[svcName]
+	for _, svcName := range utils.SortStringsNaturally(stringKeysFromMap(fis.Applications)) {
+		svc := fis.Applications[svcName]
 		for _, uName := range utils.SortStringsNaturally(stringKeysFromMap(svc.Units)) {
 			unit := svc.Units[uName]
 			pprint(uName, unit, 0)

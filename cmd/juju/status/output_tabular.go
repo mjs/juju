@@ -89,6 +89,13 @@ func FormatTabular(writer io.Writer, forceColor bool, value interface{}) error {
 	if !valueConverted {
 		return errors.Errorf("expected value of type %T, got %T", fs, value)
 	}
+
+	if fs.caasStatus != nil {
+		return errors.Errorf("formatting for CAAS status is unimplemented")
+	}
+	fis := fs.iaasStatus
+	model := fis.Model
+
 	// To format things into columns.
 	tw := output.TabWriter(writer)
 	if forceColor {
@@ -101,33 +108,33 @@ func FormatTabular(writer io.Writer, forceColor bool, value interface{}) error {
 		p(values...)
 	}
 
-	cloudRegion := fs.Model.Cloud
-	if fs.Model.CloudRegion != "" {
-		cloudRegion += "/" + fs.Model.CloudRegion
+	cloudRegion := model.Cloud
+	if model.CloudRegion != "" {
+		cloudRegion += "/" + model.CloudRegion
 	}
 
-	metering := fs.Model.MeterStatus != nil
+	metering := model.MeterStatus != nil
 
 	header := []interface{}{"Model", "Controller", "Cloud/Region", "Version"}
-	values := []interface{}{fs.Model.Name, fs.Model.Controller, cloudRegion, fs.Model.Version}
-	message := getModelMessage(fs.Model)
+	values := []interface{}{model.Name, model.Controller, cloudRegion, model.Version}
+	message := getModelMessage(model)
 	if message != "" {
 		header = append(header, "Notes")
 		values = append(values, message)
 	}
-	if fs.Model.SLA != "" {
+	if model.SLA != "" {
 		header = append(header, "SLA")
-		values = append(values, fs.Model.SLA)
+		values = append(values, model.SLA)
 	}
 
 	// The first set of headers don't use outputHeaders because it adds the blank line.
 	p(header...)
 	p(values...)
 
-	if len(fs.RemoteApplications) > 0 {
+	if len(fis.RemoteApplications) > 0 {
 		outputHeaders("SAAS name", "Status", "Store", "URL")
-		for _, appName := range utils.SortStringsNaturally(stringKeysFromMap(fs.RemoteApplications)) {
-			app := fs.RemoteApplications[appName]
+		for _, appName := range utils.SortStringsNaturally(stringKeysFromMap(fis.RemoteApplications)) {
+			app := fis.RemoteApplications[appName]
 			var store, urlPath string
 			url, err := crossmodel.ParseApplicationURL(app.ApplicationURL)
 			if err == nil {
@@ -152,8 +159,8 @@ func FormatTabular(writer io.Writer, forceColor bool, value interface{}) error {
 	outputHeaders("App", "Version", "Status", "Scale", "Charm", "Store", "Rev", "OS", "Notes")
 	tw.SetColumnAlignRight(3)
 	tw.SetColumnAlignRight(6)
-	for _, appName := range utils.SortStringsNaturally(stringKeysFromMap(fs.Applications)) {
-		app := fs.Applications[appName]
+	for _, appName := range utils.SortStringsNaturally(stringKeysFromMap(fis.Applications)) {
+		app := fis.Applications[appName]
 		version := app.Version
 		// Don't let a long version push out the version column.
 		if len(version) > maxVersionWidth {
@@ -166,7 +173,7 @@ func FormatTabular(writer io.Writer, forceColor bool, value interface{}) error {
 		}
 		w.Print(appName, version)
 		w.PrintStatus(app.StatusInfo.Current)
-		scale, warn := fs.applicationScale(appName)
+		scale, warn := fis.applicationScale(appName)
 		if warn {
 			w.PrintColor(output.WarningHighlight, scale)
 		} else {
@@ -230,11 +237,11 @@ func FormatTabular(writer io.Writer, forceColor bool, value interface{}) error {
 
 	if metering {
 		outputHeaders("Meter", "Status", "Message")
-		if fs.Model.MeterStatus != nil {
+		if model.MeterStatus != nil {
 			w.Print("model")
-			outputColor := fromMeterStatusColor(fs.Model.MeterStatus.Color)
-			w.PrintColor(outputColor, fs.Model.MeterStatus.Color)
-			w.PrintColor(outputColor, fs.Model.MeterStatus.Message)
+			outputColor := fromMeterStatusColor(model.MeterStatus.Color)
+			w.PrintColor(outputColor, model.MeterStatus.Color)
+			w.PrintColor(outputColor, model.MeterStatus.Message)
 			w.Println()
 		}
 		for _, name := range utils.SortStringsNaturally(stringKeysFromMap(units)) {
@@ -250,7 +257,7 @@ func FormatTabular(writer io.Writer, forceColor bool, value interface{}) error {
 	}
 
 	p()
-	printMachines(tw, fs.Machines)
+	printMachines(tw, fis.Machines)
 
 	if relations.len() > 0 {
 		outputHeaders("Relation", "Provides", "Consumes", "Type")
