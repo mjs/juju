@@ -287,6 +287,7 @@ type Connection interface {
 	// will be easy to remove, but until we're using them via manifolds it's
 	// prohibitively ugly to do so.
 	Client() *Client
+	CAASClient() *CAASClient
 	Uniter() (*uniter.State, error)
 	Upgrader() *upgrader.State
 	Reboot() (reboot.State, error)

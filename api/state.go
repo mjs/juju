@@ -264,6 +264,13 @@ func (st *state) Client() *Client {
 	return &Client{ClientFacade: frontend, facade: backend, st: st}
 }
 
+// CAASClient returns an object that can be used
+// to access CAAS client-specific functionality.
+func (st *state) CAASClient() *CAASClient {
+	frontend, backend := base.NewClientFacade(st, "CAASClient")
+	return &CAASClient{ClientFacade: frontend, facade: backend, st: st}
+}
+
 // UnitAssigner returns a version of the state that provides functionality
 // required by the unitassigner worker.
 func (st *state) UnitAssigner() unitassigner.API {
