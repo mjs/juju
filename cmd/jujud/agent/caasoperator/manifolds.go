@@ -15,7 +15,6 @@ import (
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	//	msapi "github.com/juju/juju/api/meterstatus"
-	"github.com/juju/juju/cmd/jujud/agent/engine"
 	//	"github.com/juju/juju/utils/proxy"
 	"github.com/juju/juju/worker"
 	"github.com/juju/juju/worker/agent"
@@ -164,18 +163,18 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// controls the messages sent via the log sender according to
 		// changes in environment config. We should only need one of
 		// these in a consolidated agent.
-		loggingConfigUpdaterName: ifNotMigrating(logger.Manifold(logger.ManifoldConfig{
+		loggingConfigUpdaterName: logger.Manifold(logger.ManifoldConfig{
 			AgentName:     agentName,
 			APICallerName: apiCallerName,
-		})),
+		}),
 
 		// The api address updater is a leaf worker that rewrites agent config
 		// as the controller addresses change. We should only need one of
 		// these in a consolidated agent.
-		apiAddressUpdaterName: ifNotMigrating(apiaddressupdater.Manifold(apiaddressupdater.ManifoldConfig{
+		apiAddressUpdaterName: apiaddressupdater.Manifold(apiaddressupdater.ManifoldConfig{
 			AgentName:     agentName,
 			APICallerName: apiCallerName,
-		})),
+		}),
 
 		// The proxy config updater is a leaf worker that sets http/https/apt/etc
 		// proxy settings.
@@ -263,13 +262,6 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// })),
 	}
 }
-
-var ifNotMigrating = engine.Housing{
-	Flags: []string{
-		migrationInactiveFlagName,
-	},
-	Occupy: migrationFortressName,
-}.Decorate
 
 const (
 	agentName            = "agent"
