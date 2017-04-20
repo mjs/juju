@@ -35,3 +35,8 @@ add-dockerhub-secret:
 		--docker-username=${DOCKER_USERNAME} \
 		--docker-password=${DOCKER_PASSWORD} \
 		--docker-email=${DOCKER_EMAIL}
+
+operator_pod != kubectl get po -o name | cut -d '/' -f 2 | grep juju-operator
+
+update-operator: push
+	kubectl exec ${operator_pod} -- kill 1
