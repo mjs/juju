@@ -10,7 +10,7 @@ import (
 	"github.com/juju/cmd"
 	"github.com/juju/errors"
 	"github.com/juju/gnuflag"
-	"github.com/juju/loggo"
+	//"github.com/juju/loggo"
 	"github.com/juju/utils/featureflag"
 	"github.com/juju/utils/voyeur"
 	"github.com/prometheus/client_golang/prometheus"
@@ -64,11 +64,6 @@ func NewCaasOperatorAgent(ctx *cmd.Context, bufferedLogger *logsender.BufferedLo
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	// MMCC debug
-	rootlogger := loggo.GetLogger("")
-	rootlogger.SetLogLevel(loggo.TRACE)
-	logger.Infof("In NewCaasOperatorAgent")
-	// end
 	return &CaasOperatorAgent{
 		AgentConf:        NewAgentConf(""),
 		configChangedVal: voyeur.NewValue(true),

@@ -5,7 +5,7 @@ package caasoperator
 
 import (
 	"github.com/juju/errors"
-	"github.com/juju/loggo"
+	//"github.com/juju/loggo"
 	"github.com/juju/utils/clock"
 	"gopkg.in/juju/names.v2"
 	worker "gopkg.in/juju/worker.v1"
@@ -22,8 +22,8 @@ import (
 // ManifoldConfig defines the names of the manifolds on which a
 // Manifold will depend.
 type ManifoldConfig struct {
-	AgentName string
-	//	APICallerName         string
+	AgentName       string
+	APICallerName   string
 	MachineLockName string
 	Clock           clock.Clock
 	//	LeadershipTrackerName string
@@ -35,21 +35,15 @@ type ManifoldConfig struct {
 // Manifold returns a dependency manifold that runs a caasoperator worker,
 // using the resource names defined in the supplied config.
 func Manifold(config ManifoldConfig) dependency.Manifold {
-	logger.Infof("About to return manifold struct")
 	return dependency.Manifold{
 		Inputs: []string{
 			config.AgentName,
-			//config.APICallerName,
-			//config.CharmDirName,
+			config.APICallerName,
+			config.CharmDirName,
 			//config.HookRetryStrategyName,
 		},
 		Start: func(context dependency.Context) (worker.Worker, error) {
-			// MMCC debug
-			rootlogger := loggo.GetLogger("")
-			rootlogger.SetLogLevel(loggo.TRACE)
-			// end
-
-			logger.Errorf("In caasoperator manifold Start")
+			logger.Errorf("In caasoperator manifold Start: new image")
 			if config.Clock == nil {
 				return nil, errors.NotValidf("missing Clock")
 			}
@@ -63,16 +57,16 @@ func Manifold(config ManifoldConfig) dependency.Manifold {
 				return nil, err
 			}
 			var apiConn api.Connection
-			// if err := context.Get(config.APICallerName, &apiConn); err != nil {
-			// 	// TODO(fwereade): absence of an APICaller shouldn't be the end of
-			// 	// the world -- we ought to return a type that can at least run the
-			// 	// leader-deposed hook -- but that's not done yet.
-			// 	return nil, err
-			// }
-			// var charmDirGuard fortress.Guard
-			// if err := context.Get(config.CharmDirName, &charmDirGuard); err != nil {
-			// 	return nil, err
-			// }
+			if err := context.Get(config.APICallerName, &apiConn); err != nil {
+				// TODO(fwereade): absence of an APICaller shouldn't be the end of
+				// the world -- we ought to return a type that can at least run the
+				// leader-deposed hook -- but that's not done yet.
+				return nil, err
+			}
+			var charmDirGuard fortress.Guard
+			if err := context.Get(config.CharmDirName, &charmDirGuard); err != nil {
+				return nil, err
+			}
 			// logger.Errorf("getting retry strategy")
 			// var hookRetryStrategy params.RetryStrategy
 			// if err := context.Get(config.HookRetryStrategyName, &hookRetryStrategy); err != nil {
@@ -97,8 +91,8 @@ func Manifold(config ManifoldConfig) dependency.Manifold {
 				//				LeadershipTracker:    leadershipTracker,
 				DataDir: agentConfig.DataDir(),
 				//				Downloader:           downloader,
-				MachineLockName: manifoldConfig.MachineLockName,
-				//CharmDirGuard:        charmDirGuard,
+				MachineLockName:    manifoldConfig.MachineLockName,
+				CharmDirGuard:      charmDirGuard,
 				UpdateStatusSignal: NewUpdateStatusTimer(),
 				//HookRetryStrategy:    hookRetryStrategy,
 				NewOperationExecutor: operation.NewExecutor,
