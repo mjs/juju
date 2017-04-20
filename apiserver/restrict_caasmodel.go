@@ -16,6 +16,7 @@ var caasModelFacadeNames = set.NewStrings(
 	"CAASApplication",
 	"CAASClient",
 	"Charms",
+	"Agent",
 )
 
 func caasModelFacadesOnly(facadeName, _ string) error {
