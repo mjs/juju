@@ -606,7 +606,7 @@ func removeCAASUnitResourcesOps(st *State, unitID string) ([]txn.Op, error) {
 	return ops, nil
 }
 
-// AllUnits returns all units of the application.
+// AllCAASUnits returns all units of the CAAS application.
 func (a *CAASApplication) AllCAASUnits() (units []*CAASUnit, err error) {
 	return allCAASUnits(a.st, a.doc.Name)
 }
@@ -618,7 +618,7 @@ func allCAASUnits(st *CAASState, caasApplication string) (units []*CAASUnit, err
 	docs := []caasUnitDoc{}
 	err = caasUnitsCollection.Find(bson.D{{"caasapplication", caasApplication}}).All(&docs)
 	if err != nil {
-		return nil, errors.Errorf("cannot get all caasunits from vaasapplication %q: %v", caasApplication, err)
+		return nil, errors.Errorf("cannot get all caasunits from caasapplication %q: %v", caasApplication, err)
 	}
 	for i := range docs {
 		units = append(units, newCAASUnit(st, &docs[i]))

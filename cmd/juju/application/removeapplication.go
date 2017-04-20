@@ -10,9 +10,11 @@ import (
 	"gopkg.in/juju/names.v2"
 
 	"github.com/juju/juju/api/application"
+	"github.com/juju/juju/api/caasapplication"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/cmd/juju/block"
 	"github.com/juju/juju/cmd/modelcmd"
+	"github.com/juju/juju/jujuclient"
 )
 
 // NewRemoveApplicationCommand returns a command which removes an application.
@@ -64,6 +66,11 @@ func (c *removeApplicationCommand) Init(args []string) error {
 	return nil
 }
 
+type removeCAASApplicationAPI interface {
+	DestroyApplications(appName ...string) ([]params.DestroyApplicationResult, error)
+	Close() error
+}
+
 type removeApplicationAPI interface {
 	Close() error
 	DestroyApplications(appName ...string) ([]params.DestroyApplicationResult, error)
@@ -83,7 +90,36 @@ func (c *removeApplicationCommand) getAPI() (removeApplicationAPI, int, error) {
 	return application.NewClient(root), version, nil
 }
 
+func (c *removeApplicationCommand) getCAASAPI() (removeCAASApplicationAPI, error) {
+	root, err := c.NewAPIRoot()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return caasapplication.NewClient(root), nil
+}
+
 func (c *removeApplicationCommand) Run(ctx *cmd.Context) error {
+	store := c.ClientStore()
+	modelDetails, err := store.ModelByName(c.ControllerName(), c.ModelName())
+	if errors.IsNotFound(err) {
+		if err := c.RefreshModels(store, c.ControllerName()); err != nil {
+			return errors.Annotate(err, "refreshing models cache")
+		}
+		// Now try again.
+		modelDetails, err = store.ModelByName(c.ControllerName(), c.ModelName())
+	}
+	if err != nil {
+		return errors.Annotate(err, "getting model details")
+	}
+
+	if modelDetails.Type == jujuclient.CAASModel {
+		client, err := c.getCAASAPI()
+		if err != nil {
+			return err
+		}
+		return c.removeCAASApplications(ctx, client)
+	}
+
 	client, apiVersion, err := c.getAPI()
 	if err != nil {
 		return err
@@ -151,6 +187,35 @@ func (c *removeApplicationCommand) removeApplications(
 				continue
 			}
 			ctx.Infof("- will detach %s", names.ReadableString(storageTag))
+		}
+	}
+	if anyFailed {
+		return cmd.ErrSilent
+	}
+	return nil
+}
+
+func (c *removeApplicationCommand) removeCAASApplications(ctx *cmd.Context, client removeCAASApplicationAPI) error {
+	results, err := client.DestroyApplications(c.ApplicationNames...)
+	if err := block.ProcessBlockedError(err, block.BlockRemove); err != nil {
+		return errors.Trace(err)
+	}
+	anyFailed := false
+	for i, name := range c.ApplicationNames {
+		result := results[i]
+		if result.Error != nil {
+			ctx.Infof("removing application %s failed: %s", name, result.Error)
+			anyFailed = true
+			continue
+		}
+		ctx.Infof("removing application %s", name)
+		for _, entity := range result.Info.DestroyedUnits {
+			unitTag, err := names.ParseUnitTag(entity.Tag)
+			if err != nil {
+				logger.Warningf("%s", err)
+				continue
+			}
+			ctx.Verbosef("- will remove %s", names.ReadableString(unitTag))
 		}
 	}
 	if anyFailed {

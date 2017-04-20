@@ -525,19 +525,13 @@ func (c *DeployCommand) deployCharm(
 	apiRoot DeployAPI,
 ) (rErr error) {
 	store := c.ClientStore()
-	modelDetails, err := store.ModelByName(
-		c.ControllerName(),
-		c.ModelName(),
-	)
+	modelDetails, err := store.ModelByName(c.ControllerName(), c.ModelName())
 	if errors.IsNotFound(err) {
 		if err := c.RefreshModels(store, c.ControllerName()); err != nil {
 			return errors.Annotate(err, "refreshing models cache")
 		}
 		// Now try again.
-		modelDetails, err = store.ModelByName(
-			c.ControllerName(),
-			c.ModelName(),
-		)
+		modelDetails, err = store.ModelByName(c.ControllerName(), c.ModelName())
 	}
 	if err != nil {
 		return errors.Annotate(err, "getting model details")

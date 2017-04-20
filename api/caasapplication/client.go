@@ -10,6 +10,7 @@ package caasapplication
 import (
 	"github.com/juju/errors"
 	"github.com/juju/loggo"
+	"gopkg.in/juju/names.v2"
 
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/apiserver/params"
@@ -80,4 +81,38 @@ func (c *Client) Deploy(args DeployArgs) error {
 		return errors.Trace(err)
 	}
 	return errors.Trace(results.OneError())
+}
+
+// DestroyApplications destroys the given applications.
+func (c *Client) DestroyApplications(appNames ...string) ([]params.DestroyApplicationResult, error) {
+	args := params.Entities{
+		Entities: make([]params.Entity, 0, len(appNames)),
+	}
+	allResults := make([]params.DestroyApplicationResult, len(appNames))
+	index := make([]int, 0, len(appNames))
+	for i, name := range appNames {
+		if !names.IsValidApplication(name) {
+			allResults[i].Error = &params.Error{
+				Message: errors.NotValidf("application name %q", name).Error(),
+			}
+			continue
+		}
+		index = append(index, i)
+		args.Entities = append(args.Entities, params.Entity{
+			Tag: names.NewApplicationTag(name).String(),
+		})
+	}
+	if len(args.Entities) > 0 {
+		var result params.DestroyApplicationResults
+		if err := c.facade.FacadeCall("DestroyApplication", args, &result); err != nil {
+			return nil, errors.Trace(err)
+		}
+		if n := len(result.Results); n != len(args.Entities) {
+			return nil, errors.Errorf("expected %d result(s), got %d", len(args.Entities), n)
+		}
+		for i, result := range result.Results {
+			allResults[index[i]] = result
+		}
+	}
+	return allResults, nil
 }
