@@ -262,6 +262,11 @@ func allCollections() collectionSchema {
 				Key: []string{"model-uuid", "machineid"},
 			}},
 		},
+		caasUnitsC: {
+			indexes: []mgo.Index{{
+				Key: []string{"model-uuid", "application"},
+			}},
+		},
 		minUnitsC: {},
 
 		// This collection holds documents that indicate units which are queued
