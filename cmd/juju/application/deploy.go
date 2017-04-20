@@ -657,7 +657,6 @@ func (c *DeployCommand) deployCharm(
 		return errors.Trace(apiRoot.CAASDeploy(caasapplication.DeployArgs{
 			CharmID:         id,
 			ApplicationName: serviceName,
-			Series:          series,
 			NumUnits:        numUnits,
 			ConfigYAML:      string(configYAML),
 		}))
