@@ -50,9 +50,6 @@ type DeployArgs struct {
 	// ApplicationName is the name to give the application.
 	ApplicationName string
 
-	// Series to be used for the machine.
-	Series string
-
 	// NumUnits is the number of units to deploy.
 	NumUnits int
 
@@ -64,14 +61,13 @@ type DeployArgs struct {
 // it. Placement directives, if provided, specify the machine on which the charm
 // is deployed.
 func (c *Client) Deploy(args DeployArgs) error {
-	deployArgs := params.ApplicationsDeploy{
-		Applications: []params.ApplicationDeploy{{
+	deployArgs := params.CAASApplicationsDeploy{
+		Applications: []params.CAASApplicationDeploy{{
 			ApplicationName: args.ApplicationName,
-			Series:          args.Series,
 			CharmURL:        args.CharmID.URL.String(),
 			Channel:         string(args.CharmID.Channel),
-			NumUnits:        args.NumUnits,
 			ConfigYAML:      args.ConfigYAML,
+			NumUnits:        args.NumUnits,
 		}},
 	}
 	var results params.ErrorResults

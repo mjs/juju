@@ -102,6 +102,7 @@ func deployApplication(backend *state.CAASState, args params.CAASApplicationDepl
 		Charm:    ch,
 		Channel:  csparams.Channel(args.Channel),
 		Settings: settings,
+		NumUnits: args.NumUnits,
 	})
 	return errors.Trace(err)
 }

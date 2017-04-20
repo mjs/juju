@@ -12,4 +12,5 @@ type CAASApplicationDeploy struct {
 	CharmURL        string `json:"charm-url"`
 	Channel         string `json:"channel"`
 	ConfigYAML      string `json:"config-yaml"` // Takes precedence over config if both are present.
+	NumUnits        int    `json:"num-units"`
 }
