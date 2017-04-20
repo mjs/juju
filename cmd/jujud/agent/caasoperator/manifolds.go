@@ -6,26 +6,26 @@ package caasoperator
 import (
 	"time"
 
-	//	"github.com/juju/errors"
+	"github.com/juju/errors"
 	"github.com/juju/utils/clock"
 	"github.com/juju/utils/voyeur"
 	"github.com/prometheus/client_golang/prometheus"
 
 	coreagent "github.com/juju/juju/agent"
-	//	"github.com/juju/juju/api"
+	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	//	msapi "github.com/juju/juju/api/meterstatus"
 	"github.com/juju/juju/cmd/jujud/agent/engine"
 	//	"github.com/juju/juju/utils/proxy"
-	//	"github.com/juju/juju/worker"
+	"github.com/juju/juju/worker"
 	"github.com/juju/juju/worker/agent"
-	//	"github.com/juju/juju/worker/apiaddressupdater"
-	//	"github.com/juju/juju/worker/apicaller"
-	//	"github.com/juju/juju/worker/apiconfigwatcher"
+	"github.com/juju/juju/worker/apiaddressupdater"
+	"github.com/juju/juju/worker/apicaller"
+	"github.com/juju/juju/worker/apiconfigwatcher"
 	"github.com/juju/juju/worker/dependency"
 	//	"github.com/juju/juju/worker/fortress"
 	//"github.com/juju/juju/worker/leadership"
-	//	"github.com/juju/juju/worker/logger"
+	"github.com/juju/juju/worker/logger"
 	"github.com/juju/juju/worker/logsender"
 	//	"github.com/juju/juju/worker/meterstatus"
 	//	"github.com/juju/juju/worker/metrics/collect"
@@ -77,15 +77,15 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 	// connectFilter exists to let us retry api connections immediately
 	// on password change, rather than causing the dependency engine to
 	// wait for a while.
-	// connectFilter := func(err error) error {
-	// 	cause := errors.Cause(err)
-	// 	if cause == apicaller.ErrChangedPassword {
-	// 		return dependency.ErrBounce
-	// 	} else if cause == apicaller.ErrConnectImpossible {
-	// 		return worker.ErrTerminateAgent
-	// 	}
-	// 	return err
-	// }
+	connectFilter := func(err error) error {
+		cause := errors.Cause(err)
+		if cause == apicaller.ErrChangedPassword {
+			return dependency.ErrBounce
+		} else if cause == apicaller.ErrConnectImpossible {
+			return worker.ErrTerminateAgent
+		}
+		return err
+	}
 
 	return dependency.Manifolds{
 
@@ -97,23 +97,23 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// The api-config-watcher manifold monitors the API server
 		// addresses in the agent config and bounces when they
 		// change. It's required as part of model migrations.
-		// apiConfigWatcherName: apiconfigwatcher.Manifold(apiconfigwatcher.ManifoldConfig{
-		// 	AgentName:          agentName,
-		// 	AgentConfigChanged: config.AgentConfigChanged,
-		// }),
+		apiConfigWatcherName: apiconfigwatcher.Manifold(apiconfigwatcher.ManifoldConfig{
+			AgentName:          agentName,
+			AgentConfigChanged: config.AgentConfigChanged,
+		}),
 
 		// The api caller is a thin concurrent wrapper around a connection
 		// to some API server. It's used by many other manifolds, which all
 		// select their own desired facades. It will be interesting to see
 		// how this works when we consolidate the agents; might be best to
 		// handle the auth changes server-side..?
-		// apiCallerName: apicaller.Manifold(apicaller.ManifoldConfig{
-		// 	AgentName:            agentName,
-		// 	APIConfigWatcherName: apiConfigWatcherName,
-		// 	APIOpen:              api.Open,
-		// 	NewConnection:        apicaller.ScaryConnect,
-		// 	Filter:               connectFilter,
-		// }),
+		apiCallerName: apicaller.Manifold(apicaller.ManifoldConfig{
+			AgentName:            agentName,
+			APIConfigWatcherName: apiConfigWatcherName,
+			APIOpen:              api.Open,
+			NewConnection:        apicaller.ScaryConnect,
+			Filter:               connectFilter,
+		}),
 
 		// The log sender is a leaf worker that sends log messages to some
 		// API server, when configured so to do. We should only need one of
@@ -164,18 +164,18 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// controls the messages sent via the log sender according to
 		// changes in environment config. We should only need one of
 		// these in a consolidated agent.
-		// loggingConfigUpdaterName: ifNotMigrating(logger.Manifold(logger.ManifoldConfig{
-		// 	AgentName:     agentName,
-		// 	APICallerName: apiCallerName,
-		// })),
+		loggingConfigUpdaterName: ifNotMigrating(logger.Manifold(logger.ManifoldConfig{
+			AgentName:     agentName,
+			APICallerName: apiCallerName,
+		})),
 
 		// The api address updater is a leaf worker that rewrites agent config
 		// as the controller addresses change. We should only need one of
 		// these in a consolidated agent.
-		// apiAddressUpdaterName: ifNotMigrating(apiaddressupdater.Manifold(apiaddressupdater.ManifoldConfig{
-		// 	AgentName:     agentName,
-		// 	APICallerName: apiCallerName,
-		// })),
+		apiAddressUpdaterName: ifNotMigrating(apiaddressupdater.Manifold(apiaddressupdater.ManifoldConfig{
+			AgentName:     agentName,
+			APICallerName: apiCallerName,
+		})),
 
 		// The proxy config updater is a leaf worker that sets http/https/apt/etc
 		// proxy settings.
@@ -220,17 +220,13 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// creates suboordinate units; runs all the hooks;
 		// sends metrics; etc etc etc.
 
-		// TODO MMCC - was wrapped with ifNotMigrating()
-
 		operatorName: caasoperator.Manifold(caasoperator.ManifoldConfig{
-			AgentName: agentName,
-			//APICallerName:   apiCallerName,
-			MachineLockName: coreagent.MachineLockName,
-			Clock:           clock.WallClock,
-			//LeadershipTrackerName: leadershipTrackerName,
-			//CharmDirName:          charmDirName,
-			//HookRetryStrategyName: hookRetryStrategyName,
-			// ? TranslateResolverErr:  .TranslateFortressErrors,
+			AgentName:             agentName,
+			APICallerName:         apiCallerName,
+			MachineLockName:       coreagent.MachineLockName,
+			Clock:                 clock.WallClock,
+			CharmDirName:          charmDirName,
+			HookRetryStrategyName: hookRetryStrategyName,
 		}),
 
 		// // TODO (mattyw) should be added to machine agent.
