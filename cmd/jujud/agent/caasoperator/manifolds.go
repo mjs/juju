@@ -12,25 +12,20 @@ import (
 
 	coreagent "github.com/juju/juju/agent"
 	"github.com/juju/juju/api"
-	"github.com/juju/juju/api/base"
 	//	msapi "github.com/juju/juju/api/meterstatus"
 	//	"github.com/juju/juju/utils/proxy"
 
 	"github.com/juju/juju/worker/agent"
-	"github.com/juju/juju/worker/apiaddressupdater"
 	"github.com/juju/juju/worker/apicaller"
-	"github.com/juju/juju/worker/apiconfigwatcher"
 	"github.com/juju/juju/worker/dependency"
 	//	"github.com/juju/juju/worker/fortress"
 	//"github.com/juju/juju/worker/leadership"
-	"github.com/juju/juju/worker/logger"
+
 	"github.com/juju/juju/worker/logsender"
 	//	"github.com/juju/juju/worker/meterstatus"
 	//	"github.com/juju/juju/worker/metrics/collect"
 	//	"github.com/juju/juju/worker/metrics/sender"
 	//	"github.com/juju/juju/worker/metrics/spool"
-	//	"github.com/juju/juju/worker/migrationflag"
-	//	"github.com/juju/juju/worker/migrationminion"
 	//	"github.com/juju/juju/worker/proxyupdater"
 	//	"github.com/juju/juju/worker/retrystrategy"
 	"github.com/juju/juju/worker/caasoperator"
@@ -54,11 +49,6 @@ type ManifoldsConfig struct {
 	// is updated.
 	AgentConfigChanged *voyeur.Value
 
-	// ValidateMigration is called by the migrationminion during the
-	// migration process to check that the agent will be ok when
-	// connected to the new target controller.
-	ValidateMigration func(base.APICaller) error
-
 	// PrometheusRegisterer is a prometheus.Registerer that may be used
 	// by workers to register Prometheus metric collectors.
 	PrometheusRegisterer prometheus.Registerer
@@ -79,24 +69,15 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// (Currently, that is "all manifolds", but consider a shared clock.)
 		agentName: agent.Manifold(config.Agent),
 
-		// The api-config-watcher manifold monitors the API server
-		// addresses in the agent config and bounces when they
-		// change. It's required as part of model migrations.
-		apiConfigWatcherName: apiconfigwatcher.Manifold(apiconfigwatcher.ManifoldConfig{
-			AgentName:          agentName,
-			AgentConfigChanged: config.AgentConfigChanged,
-		}),
-
 		// The api caller is a thin concurrent wrapper around a connection
 		// to some API server. It's used by many other manifolds, which all
 		// select their own desired facades. It will be interesting to see
 		// how this works when we consolidate the agents; might be best to
 		// handle the auth changes server-side..?
 		apiCallerName: apicaller.Manifold(apicaller.ManifoldConfig{
-			AgentName:            agentName,
-			APIConfigWatcherName: apiConfigWatcherName,
-			APIOpen:              api.Open,
-			NewConnection:        apicaller.OnlyConnect,
+			AgentName:     agentName,
+			APIOpen:       api.Open,
+			NewConnection: apicaller.OnlyConnect,
 		}),
 
 		// The log sender is a leaf worker that sends log messages to some
@@ -118,48 +99,22 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// 	APICallerName: apiCallerName,
 		// }),
 
-		// The migration workers collaborate to run migrations;
-		// and to create a mechanism for running other workers
-		// so they can't accidentally interfere with a migration
-		// in progress. Such a manifold should (1) depend on the
-		// migration-inactive flag, to know when to start or die;
-		// and (2) occupy the migration-fortress, so as to avoid
-		// possible interference with the minion (which will not
-		// take action until it's gained sole control of the
-		// fortress).
-		// migrationFortressName: fortress.Manifold(),
-		// migrationInactiveFlagName: migrationflag.Manifold(migrationflag.ManifoldConfig{
-		// 	APICallerName: apiCallerName,
-		// 	Check:         migrationflag.IsTerminal,
-		// 	NewFacade:     migrationflag.NewFacade,
-		// 	NewWorker:     migrationflag.NewWorker,
-		// }),
-		// migrationMinionName: migrationminion.Manifold(migrationminion.ManifoldConfig{
-		// 	AgentName:         agentName,
-		// 	APICallerName:     apiCallerName,
-		// 	FortressName:      migrationFortressName,
-		// 	APIOpen:           api.Open,
-		// 	ValidateMigration: config.ValidateMigration,
-		// 	NewFacade:         migrationminion.NewFacade,
-		// 	NewWorker:         migrationminion.NewWorker,
-		// }),
-
 		// The logging config updater is a leaf worker that indirectly
 		// controls the messages sent via the log sender according to
 		// changes in environment config. We should only need one of
 		// these in a consolidated agent.
-		loggingConfigUpdaterName: logger.Manifold(logger.ManifoldConfig{
-			AgentName:     agentName,
-			APICallerName: apiCallerName,
-		}),
+		// loggingConfigUpdaterName: logger.Manifold(logger.ManifoldConfig{
+		// 	AgentName:     agentName,
+		// 	APICallerName: apiCallerName,
+		// }),
 
 		// The api address updater is a leaf worker that rewrites agent config
 		// as the controller addresses change. We should only need one of
 		// these in a consolidated agent.
-		apiAddressUpdaterName: apiaddressupdater.Manifold(apiaddressupdater.ManifoldConfig{
-			AgentName:     agentName,
-			APICallerName: apiCallerName,
-		}),
+		// apiAddressUpdaterName: apiaddressupdater.Manifold(apiaddressupdater.ManifoldConfig{
+		// 	AgentName:     agentName,
+		// 	APICallerName: apiCallerName,
+		// }),
 
 		// The proxy config updater is a leaf worker that sets http/https/apt/etc
 		// proxy settings.
@@ -167,7 +122,7 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// code trying to run this early; if that ever helped, it was only by
 		// coincidence. Probably we ought to be making components that might
 		// need proxy config into explicit dependencies of the proxy updater...
-		// proxyConfigUpdaterName: ifNotMigrating(proxyupdater.Manifold(proxyupdater.ManifoldConfig{
+		// proxyConfigUpdaterName: proxyupdater.Manifold(proxyupdater.ManifoldConfig{
 		// 	AgentName:       agentName,
 		// 	APICallerName:   apiCallerName,
 		// 	WorkerFunc:      proxyupdater.NewWorker,
@@ -177,13 +132,13 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// The charmdir resource coordinates whether the charm directory is
 		// available or not; after 'start' hook and before 'stop' hook
 		// executes, and not during upgrades.
-		//charmDirName: ifNotMigrating(fortress.Manifold()),
+		//charmDirName: fortress.Manifold(),
 
 		// // The leadership tracker attempts to secure and retain leadership of
 		// // the unit's service, and is consulted on such matters by the
 		// // uniter. As it stannds today, we'll need one per unit in a
 		// // consolidated agent.
-		// leadershipTrackerName: ifNotMigrating(leadership.Manifold(leadership.ManifoldConfig{
+		// leadershipTrackerName: leadership.Manifold(leadership.ManifoldConfig{
 		// 	AgentName:           agentName,
 		// 	APICallerName:       apiCallerName,
 		// 	Clock:               clock.WallClock,
@@ -192,7 +147,7 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 
 		// HookRetryStrategy uses a retrystrategy worker to get a
 		// retry strategy that will be used by the caasoperator to run its hooks.
-		// hookRetryStrategyName: ifNotMigrating(retrystrategy.Manifold(retrystrategy.ManifoldConfig{
+		// hookRetryStrategyName: retrystrategy.Manifold(retrystrategy.ManifoldConfig{
 		// 	AgentName:     agentName,
 		// 	APICallerName: apiCallerName,
 		// 	NewFacade:     retrystrategy.NewFacade,
@@ -214,13 +169,13 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		}),
 
 		// // TODO (mattyw) should be added to machine agent.
-		// metricSpoolName: ifNotMigrating(spool.Manifold(spool.ManifoldConfig{
+		// metricSpoolName: spool.Manifold(spool.ManifoldConfig{
 		// 	AgentName: agentName,
 		// })),
 
 		// The metric collect worker executes the collect-metrics hook in a
 		// restricted context that can safely run concurrently with other hooks.
-		// metricCollectName: ifNotMigrating(collect.Manifold(collect.ManifoldConfig{
+		// metricCollectName: collect.Manifold(collect.ManifoldConfig{
 		// 	AgentName:       agentName,
 		// 	MetricSpoolName: metricSpoolName,
 		// 	CharmDirName:    charmDirName,
@@ -228,7 +183,7 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 
 		// // The meter status worker executes the meter-status-changed hook when it detects
 		// // that the meter status has changed.
-		// meterStatusName: ifNotMigrating(meterstatus.Manifold(meterstatus.ManifoldConfig{
+		// meterStatusName: meterstatus.Manifold(meterstatus.ManifoldConfig{
 		// 	AgentName:                agentName,
 		// 	APICallerName:            apiCallerName,
 		// 	MachineLockName:          coreagent.MachineLockName,
@@ -240,7 +195,7 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// })),
 
 		// // The metric sender worker periodically sends accumulated metrics to the controller.
-		// metricSenderName: ifNotMigrating(sender.Manifold(sender.ManifoldConfig{
+		// metricSenderName: sender.Manifold(sender.ManifoldConfig{
 		// 	AgentName:       agentName,
 		// 	APICallerName:   apiCallerName,
 		// 	MetricSpoolName: metricSpoolName,
@@ -249,15 +204,10 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 }
 
 const (
-	agentName            = "agent"
-	apiConfigWatcherName = "api-config-watcher"
-	apiCallerName        = "api-caller"
-	logSenderName        = "log-sender"
-	upgraderName         = "upgrader"
-
-	migrationFortressName     = "migration-fortress"
-	migrationInactiveFlagName = "migration-inactive-flag"
-	migrationMinionName       = "migration-minion"
+	agentName     = "agent"
+	apiCallerName = "api-caller"
+	logSenderName = "log-sender"
+	upgraderName  = "upgrader"
 
 	loggingConfigUpdaterName = "logging-config-updater"
 	proxyConfigUpdaterName   = "proxy-config-updater"
