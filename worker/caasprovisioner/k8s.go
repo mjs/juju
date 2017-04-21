@@ -124,7 +124,7 @@ func deployOperator(client *kubernetes.Clientset, appName string, configMapName 
 				Name:            "juju-operator",
 				Image:           "mikemccracken/caasoperator",
 				ImagePullPolicy: v1.PullAlways,
-				Args:            []string{"caasoperator", "--application-name", appName},
+				Args:            []string{"caasoperator", "--application-name", appName, "--debug"},
 				VolumeMounts: []v1.VolumeMount{{
 					Name: configVolName,
 					// XXX shouldn't be hardcoded
