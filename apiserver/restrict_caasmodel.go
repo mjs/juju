@@ -14,6 +14,7 @@ import (
 // and IAAS models.
 var commonModelFacadeNames = set.NewStrings(
 	"Charms",
+	"Pinger",
 )
 
 // caasModelFacadeNames lists facades that are only used with CAAS
