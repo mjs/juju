@@ -64,17 +64,33 @@ func (a *admin) login(req params.LoginRequest, loginVersion int) (params.LoginRe
 	)
 
 	if a.root.state.IsCAAS() {
-		// XXX don't bother with actual login checks here. Just fake it for the prototype for now.
-		u, err := a.srv.state.User(names.NewUserTag("admin"))
+		st := a.root.state.CAASState()
+		tag, err := names.ParseTag(req.AuthTag)
 		if err != nil {
 			return fail, err
 		}
-		a.root.entity = u
+		entity, err := st.FindEntity(tag)
+		if err != nil {
+			return fail, err
+		}
+		a.root.entity = entity
+
+		// XXX CAAS: Don't bother with password check for the prototype.
+		a.apiObserver.Login(entity.Tag(), st.ModelTag(), false, req.UserData)
+		a.loggedIn = true
+
+		// XXX CAAS: Note that we don't start the server-side presence
+		// pingers and pingTimeout goroutines for the connections
+		// yet. This means the presence pingers will always appear
+		// down (if we look) and the connections will never timeout
+		// due to lack of Ping calls.
+
+		logger.Debugf("CAAS model login: %s for %s", entity.Tag(), st.ModelUUID())
 
 		apiRoot = restrictRoot(apiRoot, caasModelFacadesOnly)
 		a.root.rpcConn.ServeRoot(apiRoot, serverError)
 		return params.LoginResult{
-			ModelTag:      a.root.state.CAASState().ModelTag().String(),
+			ModelTag:      st.ModelTag().String(),
 			ControllerTag: a.srv.state.ControllerTag().String(),
 			ServerVersion: jujuversion.Current.String(),
 			Facades:       filterFacades(a.srv.facades, isCAASModelFacade),
