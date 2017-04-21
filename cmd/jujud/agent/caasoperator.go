@@ -20,7 +20,6 @@ import (
 	"gopkg.in/tomb.v1"
 
 	"github.com/juju/juju/agent"
-	"github.com/juju/juju/api/base"
 	//	apicaasoperator "github.com/juju/juju/api/caasoperator"
 	"github.com/juju/juju/cmd/jujud/agent/caasoperator"
 	cmdutil "github.com/juju/juju/cmd/jujud/util"
@@ -141,7 +140,6 @@ func (op *CaasOperatorAgent) APIWorkers() (worker.Worker, error) {
 		LogSource:            op.bufferedLogger.Logs(),
 		LeadershipGuarantee:  30 * time.Second,
 		AgentConfigChanged:   op.configChangedVal,
-		ValidateMigration:    op.validateMigration,
 		PrometheusRegisterer: op.prometheusRegistry,
 	})
 
@@ -185,26 +183,4 @@ func (op *CaasOperatorAgent) ChangeConfig(mutate agent.ConfigMutator) error {
 	err := op.AgentConf.ChangeConfig(mutate)
 	op.configChangedVal.Set(true)
 	return errors.Trace(err)
-}
-
-// validateMigration is called by the migrationminion to help check
-// that the agent will be ok when connected to a new controller.
-func (op *CaasOperatorAgent) validateMigration(apiCaller base.APICaller) error {
-	// unitTag := names.NewUnitTag(op.ApplicationName)
-	// facade := uniter.NewState(apiCaller, unitTag)
-	// _, err := facade.Unit(unitTag)
-	// if err != nil {
-	// 	return errors.Trace(err)
-	// }
-	// model, err := facade.Model()
-	// if err != nil {
-	// 	return errors.Trace(err)
-	// }
-	// curModelUUID := op.CurrentConfig().Model().Id()
-	// newModelUUID := model.UUID()
-	// if newModelUUID != curModelUUID {
-	// 	return errors.Errorf("model mismatch when validating: got %q, expected %q",
-	// 		newModelUUID, curModelUUID)
-	// }
-	return nil
 }
