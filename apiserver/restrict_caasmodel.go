@@ -10,13 +10,17 @@ import (
 	"github.com/juju/utils/set"
 )
 
-// caasModelFacadeNames are the root names that only apply to a CAAS
-// model.
+// commonModelFacadeNames lists facades that are shared between CAAS
+// and IAAS models.
+var commonModelFacadeNames = set.NewStrings(
+	"Charms",
+)
+
+// caasModelFacadeNames lists facades that are only used with CAAS
+// models.
 var caasModelFacadeNames = set.NewStrings(
 	"CAASApplication",
 	"CAASClient",
-	"Charms",
-	"Agent",
 )
 
 func caasModelFacadesOnly(facadeName, _ string) error {
@@ -29,5 +33,7 @@ func caasModelFacadesOnly(facadeName, _ string) error {
 // isCAASModelFacade reports whether the given facade name can be accessed
 // using the controller connection.
 func isCAASModelFacade(facadeName string) bool {
-	return caasModelFacadeNames.Contains(facadeName) || commonFacadeNames.Contains(facadeName)
+	return caasModelFacadeNames.Contains(facadeName) ||
+		commonModelFacadeNames.Contains(facadeName) ||
+		commonFacadeNames.Contains(facadeName)
 }

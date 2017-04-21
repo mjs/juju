@@ -17,5 +17,10 @@ func modelFacadesOnly(facadeName, _ string) error {
 }
 
 func isModelFacade(facadeName string) bool {
-	return !controllerFacadeNames.Contains(facadeName) && !caasModelFacadeNames.Contains(facadeName)
+	switch {
+	case controllerFacadeNames.Contains(facadeName), caasModelFacadeNames.Contains(facadeName):
+		return false
+	default:
+		return true
+	}
 }
