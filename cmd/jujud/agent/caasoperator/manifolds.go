@@ -18,6 +18,7 @@ import (
 	"github.com/juju/juju/worker/agent"
 	"github.com/juju/juju/worker/apicaller"
 	"github.com/juju/juju/worker/dependency"
+	"github.com/juju/juju/worker/fortress"
 	//	"github.com/juju/juju/worker/fortress"
 	//"github.com/juju/juju/worker/leadership"
 
@@ -132,7 +133,7 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// The charmdir resource coordinates whether the charm directory is
 		// available or not; after 'start' hook and before 'stop' hook
 		// executes, and not during upgrades.
-		//charmDirName: fortress.Manifold(),
+		charmDirName: fortress.Manifold(),
 
 		// // The leadership tracker attempts to secure and retain leadership of
 		// // the unit's service, and is consulted on such matters by the
