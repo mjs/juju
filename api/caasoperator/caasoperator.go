@@ -19,11 +19,11 @@ import (
 	"github.com/juju/juju/watcher"
 )
 
-const caasoperatorFacade = "CaasOperator"
+const caasoperatorFacade = "CAASOperator"
 
 var logger = loggo.GetLogger("juju.api.caasoperator")
 
-// State provides access to the CaasOperator API facade.
+// State provides access to the CAASOperator API facade.
 type State struct {
 	*common.ModelWatcher
 	*common.APIAddresser
@@ -35,7 +35,7 @@ type State struct {
 	applicationTag names.ApplicationTag
 }
 
-// newStateForVersion creates a new client-side CaasOperator facade for the
+// newStateForVersion creates a new client-side CAASOperator facade for the
 // given version.
 func newStateForVersion(
 	caller base.APICaller,
@@ -72,10 +72,10 @@ func newStateForVersionFn(version int) func(base.APICaller, names.ApplicationTag
 	}
 }
 
-// newStateV4 creates a new client-side CaasOperator facade, version 4.
+// newStateV4 creates a new client-side CAASOperator facade, version 4.
 var newStateV4 = newStateForVersionFn(4)
 
-// NewState creates a new client-side CaasOperator facade.
+// NewState creates a new client-side CAASOperator facade.
 // Defined like this to allow patching during tests.
 var NewState = newStateV4
 
@@ -328,7 +328,7 @@ func (st *State) Model() (*Model, error) {
 // relation that applies.
 func (st *State) AllMachinePorts(machineTag names.MachineTag) (map[network.PortRange]params.RelationUnit, error) {
 	if st.BestAPIVersion() < 1 {
-		// AllMachinePorts() was introduced in CaasOperatorAPIV1.
+		// AllMachinePorts() was introduced in CAASOperatorAPIV1.
 		return nil, errors.NotImplementedf("AllMachinePorts() (need V1+)")
 	}
 	var results params.MachinePortsResults
