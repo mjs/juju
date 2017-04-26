@@ -157,24 +157,22 @@ func NewCaasOperator(caasoperatorParams *CaasOperatorParams) (*CaasOperator, err
 			return op.loop(caasoperatorParams.CaasOperatorTag)
 		},
 	})
-	logger.Errorf("NewCaasOperator: invoked catacomb")
 	return op, errors.Trace(err)
 }
 
 func (op *CaasOperator) loop(caasoperatortag names.ApplicationTag) (err error) {
-	logger.Errorf("Inside CaasOperator.loop")
 	if err := op.init(caasoperatortag); err != nil {
 		if err == jworker.ErrTerminateAgent {
 			return err
 		}
 		return errors.Annotatef(err, "failed to initialize caasoperator for %q", caasoperatortag)
 	}
-	//logger.Errorf("caas unit %q started", op.caasunit)
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
 	}
+
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
@@ -407,16 +405,16 @@ func (op *CaasOperator) terminate() error {
 }
 
 func (op *CaasOperator) init(caasapplicationtag names.ApplicationTag) (err error) {
-
 	op.caasapplication, err = op.st.CAASApplication(caasapplicationtag)
 	if err != nil {
 		return err
 	}
 
-	op.caasunits, err = op.caasapplication.AllCAASUnits()
-	if err != nil {
-		return err
-	}
+	// XXX this doesn't work yet
+	// op.caasunits, err = op.caasapplication.AllCAASUnits()
+	// if err != nil {
+	// 	return err
+	// }
 
 	// if op.caasunit.Life() == params.Dead {
 	// 	// If we started up already dead, we should not progress further. If we
@@ -425,6 +423,7 @@ func (op *CaasOperator) init(caasapplicationtag names.ApplicationTag) (err error
 	// 	// and inescapable, whereas this one is not.
 	// 	return jworker.ErrTerminateAgent
 	// }
+
 	if err := jujuc.EnsureSymlinks(op.paths.ToolsDir); err != nil {
 		return err
 	}
