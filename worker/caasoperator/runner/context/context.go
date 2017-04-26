@@ -6,7 +6,6 @@
 package context
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +20,6 @@ import (
 	"github.com/juju/juju/api/caasoperator"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/network"
-	"github.com/juju/juju/status"
 	"github.com/juju/juju/worker/caasoperator/runner/jujuc"
 )
 
@@ -57,9 +55,9 @@ var ErrIsNotLeader = errors.Errorf("this caasoperator is not the leader")
 // ComponentConfig holds all the information related to a hook context
 // needed by components.
 type ComponentConfig struct {
-	CaasUnitName string
-	DataDir      string
-	APICaller    base.APICaller
+	AppName   string
+	DataDir   string
+	APICaller base.APICaller
 }
 
 // ComponentFunc is a factory function for Context components.
@@ -90,7 +88,7 @@ type HookProcess interface {
 
 // HookContext is the implementation of jujuc.Context.
 type HookContext struct {
-	caasUnit *caasoperator.CAASUnit
+	app *caasoperator.CAASApplication
 
 	// state is the handle to the caasoperator State so that HookContext can make
 	// API calls on the stateservice.
@@ -195,9 +193,9 @@ func (ctx *HookContext) Component(name string) (jujuc.ContextComponent, error) {
 
 	facade := ctx.state.Facade()
 	config := ComponentConfig{
-		CaasUnitName: ctx.caasUnit.Name(),
-		DataDir:      ctx.componentDir(name),
-		APICaller:    facade.RawAPICaller(),
+		AppName:   ctx.app.Name(),
+		DataDir:   ctx.componentDir(name),
+		APICaller: facade.RawAPICaller(),
 	}
 	compCtx, err := compCtxFunc(config)
 	if err != nil {
@@ -263,15 +261,12 @@ func (ctx *HookContext) ApplicationName() string {
 // the service to which this context caasoperator belongs, only if this caasoperator is
 // the leader.
 func (ctx *HookContext) ApplicationStatus() (jujuc.ApplicationStatusInfo, error) {
-	var err error
-	service, err := ctx.caasUnit.CAASApplication()
-	if err != nil {
-		return jujuc.ApplicationStatusInfo{}, errors.Trace(err)
-	}
-	status, err := service.Status(ctx.caasUnit.Name())
-	if err != nil {
-		return jujuc.ApplicationStatusInfo{}, errors.Trace(err)
-	}
+	// XXX
+	// var err error
+	// status, err := service.Status(ctx.app.Name())
+	// if err != nil {
+	// 	return jujuc.ApplicationStatusInfo{}, errors.Trace(err)
+	// }
 	// us := make([]jujuc.StatusInfo, len(status.Caasoperators))
 	// i := 0
 	// for t, s := range status.Caasoperators {
@@ -283,15 +278,16 @@ func (ctx *HookContext) ApplicationStatus() (jujuc.ApplicationStatusInfo, error)
 	// 	}
 	// 	i++
 	// }
-	return jujuc.ApplicationStatusInfo{
-		Application: jujuc.StatusInfo{
-			Tag:    service.Tag().String(),
-			Status: string(status.Application.Status),
-			Info:   status.Application.Info,
-			Data:   status.Application.Data,
-		},
-		//Caasoperators: us,
-	}, nil
+	// return jujuc.ApplicationStatusInfo{
+	// 	Application: jujuc.StatusInfo{
+	// 		Tag:    service.Tag().String(),
+	// 		Status: string(status.Application.Status),
+	// 		Info:   status.Application.Info,
+	// 		Data:   status.Application.Data,
+	// 	},
+	// 	//Caasoperators: us,
+	// }, nil
+	return jujuc.ApplicationStatusInfo{}, errors.NotImplementedf("method")
 }
 
 // SetCaasoperatorStatus will set the given status for this caasoperator.
@@ -299,35 +295,32 @@ func (ctx *HookContext) SetCaasUnitStatus(caasUnitStatus jujuc.StatusInfo) error
 	ctx.hasRunStatusSet = true
 	logger.Tracef("[CAASUNIT-STATUS] %s: %s", caasUnitStatus.Status, caasUnitStatus.Info)
 
-	return ctx.caasUnit.SetCAASUnitStatus(
-		status.Status(caasUnitStatus.Status),
-		caasUnitStatus.Info,
-		caasUnitStatus.Data,
-	)
+	// XXX
+	// return ctx.caasUnit.SetCAASUnitStatus(
+	// 	status.Status(caasUnitStatus.Status),
+	// 	caasUnitStatus.Info,
+	// 	caasUnitStatus.Data,
+	// )
+	return nil
 }
 
 // SetApplicationStatus will set the given status to the service to which this
 // caasoperator's belong, only if this caasoperator is the leader.
 func (ctx *HookContext) SetApplicationStatus(serviceStatus jujuc.StatusInfo) error {
 	logger.Tracef("[APPLICATION-STATUS] %s: %s", serviceStatus.Status, serviceStatus.Info)
-	isLeader, err := ctx.IsLeader()
-	if err != nil {
-		return errors.Annotatef(err, "cannot determine leadership")
-	}
-	if !isLeader {
-		return ErrIsNotLeader
-	}
 
-	service, err := ctx.caasUnit.CAASApplication()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	return service.SetStatus(
-		ctx.caasUnit.Name(),
-		status.Status(serviceStatus.Status),
-		serviceStatus.Info,
-		serviceStatus.Data,
-	)
+	// XXX
+	// service, err := ctx.caasUnit.CAASApplication()
+	// if err != nil {
+	// 	return errors.Trace(err)
+	// }
+	// return service.SetStatus(
+	// 	ctx.caasUnit.Name(),
+	// 	status.Status(serviceStatus.Status),
+	// 	serviceStatus.Info,
+	// 	serviceStatus.Data,
+	// )
+	return nil
 }
 
 func (ctx *HookContext) HasExecutionSetApplicationStatus() bool {
@@ -353,18 +346,20 @@ func (ctx *HookContext) PrivateAddress() (string, error) {
 }
 
 func (ctx *HookContext) ConfigSettings() (charm.Settings, error) {
-	if ctx.configSettings == nil {
-		var err error
-		ctx.configSettings, err = ctx.caasUnit.ConfigSettings()
-		if err != nil {
-			return nil, err
-		}
-	}
-	result := charm.Settings{}
-	for name, value := range ctx.configSettings {
-		result[name] = value
-	}
-	return result, nil
+	// XXX
+	// if ctx.configSettings == nil {
+	// 	var err error
+	// 	ctx.configSettings, err = ctx.app.ConfigSettings()
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// }
+	// result := charm.Settings{}
+	// for name, value := range ctx.configSettings {
+	// 	result[name] = value
+	// }
+	// return result, nil
+	return nil, errors.NotImplementedf("method")
 }
 
 // HookVars returns an os.Environ-style list of strings necessary to run a hook
@@ -397,28 +392,29 @@ func (context *HookContext) HookVars(paths Paths) ([]string, error) {
 }
 
 func (ctx *HookContext) handleReboot(err *error) {
-	logger.Tracef("checking for reboot request")
-	rebootPriority := ctx.GetRebootPriority()
-	switch rebootPriority {
-	case jujuc.RebootSkip:
-		return
-	case jujuc.RebootAfterHook:
-		// Reboot should happen only after hook has finished.
-		if *err != nil {
-			return
-		}
-		*err = ErrReboot
-	case jujuc.RebootNow:
-		*err = ErrRequeueAndReboot
-	}
-	err2 := ctx.caasUnit.SetCAASUnitStatus(status.Rebooting, "", nil)
-	if err2 != nil {
-		logger.Errorf("updating agent status: %v", err2)
-	}
-	reqErr := ctx.caasUnit.RequestReboot()
-	if reqErr != nil {
-		*err = reqErr
-	}
+	// XXX
+	// logger.Tracef("checking for reboot request")
+	// rebootPriority := ctx.GetRebootPriority()
+	// switch rebootPriority {
+	// case jujuc.RebootSkip:
+	// 	return
+	// case jujuc.RebootAfterHook:
+	// 	// Reboot should happen only after hook has finished.
+	// 	if *err != nil {
+	// 		return
+	// 	}
+	// 	*err = ErrReboot
+	// case jujuc.RebootNow:
+	// 	*err = ErrRequeueAndReboot
+	// }
+	// err2 := ctx.caasUnit.SetCAASUnitStatus(status.Rebooting, "", nil)
+	// if err2 != nil {
+	// 	logger.Errorf("updating agent status: %v", err2)
+	// }
+	// reqErr := ctx.caasUnit.RequestReboot()
+	// if reqErr != nil {
+	// 	*err = reqErr
+	// }
 }
 
 // Prepare implements the Context interface.
@@ -549,36 +545,40 @@ func (ctx *HookContext) NetworkConfig(bindingName string) ([]params.NetworkConfi
 // CaasoperatorWorkloadVersion returns the version of the workload reported by
 // the current caasoperator.
 func (ctx *HookContext) ApplicationWorkloadVersion() (string, error) {
-	var results params.StringResults
-	args := params.Entities{
-		Entities: []params.Entity{{Tag: ctx.caasUnit.Tag().String()}},
-	}
-	err := ctx.state.Facade().FacadeCall("WorkloadVersion", args, &results)
-	if err != nil {
-		return "", err
-	}
-	if len(results.Results) != 1 {
-		return "", fmt.Errorf("expected 1 result, got %d", len(results.Results))
-	}
-	result := results.Results[0]
-	if result.Error != nil {
-		return "", result.Error
-	}
-	return result.Result, nil
+	// XXX
+	// var results params.StringResults
+	// args := params.Entities{
+	// 	Entities: []params.Entity{{Tag: ctx.caasUnit.Tag().String()}},
+	// }
+	// err := ctx.state.Facade().FacadeCall("WorkloadVersion", args, &results)
+	// if err != nil {
+	// 	return "", err
+	// }
+	// if len(results.Results) != 1 {
+	// 	return "", fmt.Errorf("expected 1 result, got %d", len(results.Results))
+	// }
+	// result := results.Results[0]
+	// if result.Error != nil {
+	// 	return "", result.Error
+	// }
+	// return result.Result, nil
+	return "", errors.NotImplementedf("method")
 }
 
 // SetCaasoperatorWorkloadVersion sets the current caasoperator's workload version to
 // the specified value.
 func (ctx *HookContext) SetApplicationWorkloadVersion(version string) error {
-	var result params.ErrorResults
-	args := params.EntityWorkloadVersions{
-		Entities: []params.EntityWorkloadVersion{
-			{Tag: ctx.caasUnit.Tag().String(), WorkloadVersion: version},
-		},
-	}
-	err := ctx.state.Facade().FacadeCall("SetWorkloadVersion", args, &result)
-	if err != nil {
-		return err
-	}
-	return result.OneError()
+	// XXX
+	// var result params.ErrorResults
+	// args := params.EntityWorkloadVersions{
+	// 	Entities: []params.EntityWorkloadVersion{
+	// 		{Tag: ctx.caasUnit.Tag().String(), WorkloadVersion: version},
+	// 	},
+	// }
+	// err := ctx.state.Facade().FacadeCall("SetWorkloadVersion", args, &result)
+	// if err != nil {
+	// 	return err
+	// }
+	// return result.OneError()
+	return errors.NotImplementedf("method")
 }

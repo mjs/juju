@@ -26,18 +26,18 @@ import (
 
 	"github.com/juju/juju/api/caasoperator"
 	"github.com/juju/juju/apiserver/params"
-	"github.com/juju/juju/core/leadership"
 	"github.com/juju/juju/status"
 	jworker "github.com/juju/juju/worker"
 	"github.com/juju/juju/worker/caasoperator/actions"
 	"github.com/juju/juju/worker/caasoperator/charm"
 	"github.com/juju/juju/worker/caasoperator/hook"
-	caasoperatorleadership "github.com/juju/juju/worker/caasoperator/leadership"
 	"github.com/juju/juju/worker/caasoperator/operation"
 	"github.com/juju/juju/worker/caasoperator/relation"
 	"github.com/juju/juju/worker/caasoperator/remotestate"
 	"github.com/juju/juju/worker/caasoperator/resolver"
 	"github.com/juju/juju/worker/caasoperator/runcommands"
+	"github.com/juju/juju/worker/caasoperator/runner"
+	"github.com/juju/juju/worker/caasoperator/runner/context"
 	"github.com/juju/juju/worker/caasoperator/runner/jujuc"
 	"github.com/juju/juju/worker/catacomb"
 	"github.com/juju/juju/worker/fortress"
@@ -63,9 +63,8 @@ type CaasOperator struct {
 	paths           Paths
 	caasapplication *caasoperator.CAASApplication
 	caasunits       []*caasoperator.CAASUnit
-	//caasunit  *caasoperator.CAASUnit
-	relations relation.Relations
-	clock     clock.Clock
+	relations       relation.Relations
+	clock           clock.Clock
 
 	// Cache the last reported status information
 	// so we don't make unnecessary api calls.
@@ -78,8 +77,7 @@ type CaasOperator struct {
 	newOperationExecutor NewExecutorFunc
 	translateResolverErr func(error) error
 
-	leadershipTracker leadership.Tracker
-	charmDirGuard     fortress.Guard
+	charmDirGuard fortress.Guard
 
 	hookLockName string
 
@@ -110,7 +108,6 @@ type CaasOperator struct {
 type CaasOperatorParams struct {
 	CaasOperatorFacade   *caasoperator.State
 	CaasOperatorTag      names.ApplicationTag
-	LeadershipTracker    leadership.Tracker
 	DataDir              string
 	Downloader           charm.Downloader
 	MachineLockName      string
@@ -141,7 +138,6 @@ func NewCaasOperator(caasoperatorParams *CaasOperatorParams) (*CaasOperator, err
 		st:                   caasoperatorParams.CaasOperatorFacade,
 		paths:                NewPaths(caasoperatorParams.DataDir, caasoperatorParams.CaasOperatorTag),
 		hookLockName:         caasoperatorParams.MachineLockName,
-		leadershipTracker:    caasoperatorParams.LeadershipTracker,
 		charmDirGuard:        caasoperatorParams.CharmDirGuard,
 		updateStatusAt:       caasoperatorParams.UpdateStatusSignal,
 		hookRetryStrategy:    caasoperatorParams.HookRetryStrategy,
@@ -254,7 +250,6 @@ func (op *CaasOperator) loop(caasoperatortag names.ApplicationTag) (err error) {
 		watcher, err = remotestate.NewWatcher(
 			remotestate.WatcherConfig{
 				State:               remotestate.NewAPIState(op.st),
-				LeadershipTracker:   op.leadershipTracker,
 				ApplicationTag:      caasoperatortag,
 				UpdateStatusChannel: op.updateStatusAt,
 				CommandChannel:      op.commandChannel,
@@ -303,7 +298,6 @@ func (op *CaasOperator) loop(caasoperatortag names.ApplicationTag) (err error) {
 			StartRetryHookTimer: retryHookTimer.Start,
 			StopRetryHookTimer:  retryHookTimer.Reset,
 			Actions:             actions.NewResolver(),
-			Leadership:          caasoperatorleadership.NewResolver(),
 			Relations:           relation.NewRelationsResolver(op.relations),
 			Commands: runcommands.NewCommandsResolver(
 				op.commands, watcher.CommandCompleted,
@@ -430,6 +424,8 @@ func (op *CaasOperator) init(caasapplicationtag names.ApplicationTag) (err error
 	if err := os.MkdirAll(op.paths.State.RelationsDir, 0755); err != nil {
 		return errors.Trace(err)
 	}
+
+	// XXX
 	// relations, err := relation.NewRelations(
 	// 	op.st, caasapplicationtag, op.paths.State.CharmDir,
 	// 	op.paths.State.RelationsDir, op.catacomb.Dying(),
@@ -438,52 +434,53 @@ func (op *CaasOperator) init(caasapplicationtag names.ApplicationTag) (err error
 	// 	return errors.Annotatef(err, "cannot create relations")
 	// }
 	// op.relations = relations
-	// storageAttachments, err := storage.NewAttachments(
-	// 	op.st, caasapplicationtag, op.paths.State.StorageDir, op.catacomb.Dying(),
-	// )
-	// if err != nil {
-	// 	return errors.Annotatef(err, "cannot create storage hook source")
-	// }
-	// op.storage = storageAttachments
+
 	op.commands = runcommands.NewCommands()
 	op.commandChannel = make(chan string)
 
 	if err := charm.ClearDownloads(op.paths.State.BundlesDir); err != nil {
 		logger.Warningf(err.Error())
 	}
-	// deployer, err := charm.NewDeployer(
-	// 	op.paths.State.CharmDir,
-	// 	op.paths.State.DeployerDir,
-	// 	charm.NewBundlesDir(op.paths.State.BundlesDir, op.downloader),
-	// )
-	// if err != nil {
-	// 	return errors.Annotatef(err, "cannot create deployer")
-	// }
-	// contextFactory, err := context.NewContextFactory(
-	// 	op.st, caasapplicationtag, op.leadershipTracker, op.relations.GetInfo, op.storage, op.paths, op.clock,
-	// )
-	// if err != nil {
-	// 	return err
-	// }
-	// runnerFactory, err := runner.NewFactory(
-	// 	op.st, op.paths, contextFactory,
-	// )
-	// if err != nil {
-	// 	return errors.Trace(err)
-	// }
-	// op.operationFactory = operation.NewFactory(operation.FactoryParams{
-	// 	Deployer:       deployer,
-	// 	RunnerFactory:  runnerFactory,
-	// 	Callbacks:      &operationCallbacks{op},
-	// 	Abort:          op.catacomb.Dying(),
-	// 	MetricSpoolDir: op.paths.GetMetricsSpoolDir(),
-	// })
+	deployer, err := charm.NewDeployer(
+		op.paths.State.CharmDir,
+		op.paths.State.DeployerDir,
+		charm.NewBundlesDir(op.paths.State.BundlesDir, op.downloader),
+	)
+	if err != nil {
+		return errors.Annotatef(err, "cannot create deployer")
+	}
 
-	// operationExecutor, err := op.newOperationExecutor(op.paths.State.OperationsFile, op.getServiceCharmURL, op.acquireExecutionLock)
-	// if err != nil {
-	// 	return errors.Trace(err)
-	// }
-	// op.operationExecutor = operationExecutor
+	contextFactory, err := context.NewContextFactory(
+		op.st, caasapplicationtag,
+		nil, // XXX op.relations.GetInfo,
+		op.paths, op.clock,
+	)
+	if err != nil {
+		return errors.Annotate(err, "creating context factory")
+	}
+	runnerFactory, err := runner.NewFactory(
+		op.st, op.paths, contextFactory,
+	)
+	if err != nil {
+		return errors.Annotate(err, "creating runner factory")
+	}
+	op.operationFactory = operation.NewFactory(operation.FactoryParams{
+		Deployer:       deployer,
+		RunnerFactory:  runnerFactory,
+		Callbacks:      &operationCallbacks{op},
+		Abort:          op.catacomb.Dying(),
+		MetricSpoolDir: op.paths.GetMetricsSpoolDir(),
+	})
+
+	operationExecutor, err := op.newOperationExecutor(
+		op.paths.State.OperationsFile,
+		op.getServiceCharmURL,
+		op.acquireExecutionLock,
+	)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	op.operationExecutor = operationExecutor
 
 	logger.Debugf("starting juju-run listener on unix:%s", op.paths.Runtime.JujuRunSocket)
 	commandRunner, err := NewChannelCommandRunner(ChannelCommandRunnerConfig{
