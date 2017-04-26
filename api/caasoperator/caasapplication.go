@@ -192,9 +192,7 @@ func (s *CAASApplication) WatchLeadershipSettings() (watcher.NotifyWatcher, erro
 }
 
 func (s *CAASApplication) AllCAASUnits() (units []*CAASUnit, err error) {
-	app, err := s.st.CAASApplication(s.tag)
-	if err != nil {
-		return nil, err
-	}
-	return app.AllCAASUnits()
+	// err := s.st.facade.FacadeCall("AllCAASUnits", args, &results)
+	// Needs server-side support
+	return nil, errors.NotImplementedf("method")
 }
