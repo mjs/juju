@@ -36,15 +36,15 @@ add-dockerhub-secret:
 		--docker-password=${DOCKER_PASSWORD} \
 		--docker-email=${DOCKER_EMAIL}
 
-operator_pod != kubectl get po -o name | cut -d '/' -f 2 | grep juju-operator
+operator_pods != kubectl get po -o name | cut -d '/' -f 2 | grep juju-operator
 
 update-operator: push
-	kubectl exec ${operator_pod} -- kill 1
+	$(foreach p,$(operator_pods), kubectl exec $(p) -- kill 1
 
 kubeworkers != juju status -m ${JUJU_K8S_MODEL} kubernetes-worker --format json | jq -c '.machines | keys' | tr  -c '[:digit:]' ' '
-local-update-operator: image
-	docker save ${DOCKER_USERNAME}/caasoperator | pv | gzip > /tmp/caasoperator-image.tar.gz
+local-push: image
+	docker save ${DOCKER_USERNAME}/caasoperator | gzip > /tmp/caasoperator-image.tar.gz
 	$(foreach wm,$(kubeworkers), juju scp -m ${JUJU_K8S_MODEL} /tmp/caasoperator-image.tar.gz $(wm):/tmp/caasoperator-image.tar.gz ; )
-	$(foreach wm,$(kubeworkers), juju run --timeout 30m -m ${JUJU_K8S_MODEL} --machine $(wm) -- "zcat /tmp/caasoperator-image.tar.gz | docker load" ; )
-	@echo restarting ${operator_pod}
-	kubectl exec ${operator_pod} -- kill 1
+	$(foreach wm,$(kubeworkers), juju ssh -m ${JUJU_K8S_MODEL} $(wm) -- "zcat /tmp/caasoperator-image.tar.gz | docker load" ; )
+	@echo restarting ${operator_pods}
+	$(foreach p,$(operator_pods), kubectl exec $(p) -- kill 1 ; )
