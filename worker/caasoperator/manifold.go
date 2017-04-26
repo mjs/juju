@@ -73,7 +73,7 @@ func Manifold(config ManifoldConfig) dependency.Manifold {
 			// 	return nil, err
 			// }
 
-			//			downloader := api.NewCharmDownloader(apiConn.Client())
+			downloader := api.NewCharmDownloader(apiConn.Client())
 			logger.Errorf("getting agent config")
 			manifoldConfig := config
 			// Configure and start the caasoperator.
@@ -89,8 +89,8 @@ func Manifold(config ManifoldConfig) dependency.Manifold {
 				CaasOperatorFacade: caasoperatorFacade,
 				CaasOperatorTag:    caasoperatorTag,
 				//				LeadershipTracker:    leadershipTracker,
-				DataDir: agentConfig.DataDir(),
-				//				Downloader:           downloader,
+				DataDir:            agentConfig.DataDir(),
+				Downloader:         downloader,
 				MachineLockName:    manifoldConfig.MachineLockName,
 				CharmDirGuard:      charmDirGuard,
 				UpdateStatusSignal: NewUpdateStatusTimer(),
