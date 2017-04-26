@@ -36,15 +36,16 @@ add-dockerhub-secret:
 		--docker-password=${DOCKER_PASSWORD} \
 		--docker-email=${DOCKER_EMAIL}
 
-operator_pods != kubectl get po -o name | cut -d '/' -f 2 | grep juju-operator
 
-update-operator: push
-	$(foreach p,$(operator_pods), kubectl exec $(p) -- kill 1
+local-update-restart: local-update restart-operators
 
 kubeworkers != juju status -m ${JUJU_K8S_MODEL} kubernetes-worker --format json | jq -c '.machines | keys' | tr  -c '[:digit:]' ' '
-local-push: image
+local-update: image
 	docker save ${DOCKER_USERNAME}/caasoperator | gzip > /tmp/caasoperator-image.tar.gz
 	$(foreach wm,$(kubeworkers), juju scp -m ${JUJU_K8S_MODEL} /tmp/caasoperator-image.tar.gz $(wm):/tmp/caasoperator-image.tar.gz ; )
 	$(foreach wm,$(kubeworkers), juju ssh -m ${JUJU_K8S_MODEL} $(wm) -- "zcat /tmp/caasoperator-image.tar.gz | docker load" ; )
+
+operator_pods != kubectl get po -o name | cut -d '/' -f 2 | grep juju-operator
+restart-operators:
 	@echo restarting ${operator_pods}
 	$(foreach p,$(operator_pods), kubectl exec $(p) -- kill 1 ; )
