@@ -14,7 +14,6 @@ import (
 	"gopkg.in/juju/names.v2"
 
 	"github.com/juju/juju/api/caasoperator"
-	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/core/leadership"
 	"github.com/juju/juju/worker/caasoperator/hook"
 )
@@ -48,15 +47,14 @@ type RelationsFunc func() map[int]*RelationInfo
 
 type contextFactory struct {
 	// API connection fields; unit should be deprecated, but isn't yet.
-	caasUnit *caasoperator.CAASUnit
-	state    *caasoperator.State
-	tracker  leadership.Tracker
+	app     *caasoperator.CAASApplication
+	state   *caasoperator.State
+	tracker leadership.Tracker
 
 	// Fields that shouldn't change in a factory's lifetime.
-	paths      Paths
-	modelUUID  string
-	envName    string
-	machineTag names.MachineTag
+	paths     Paths
+	modelUUID string
+	envName   string
 
 	clock clock.Clock
 
@@ -72,16 +70,14 @@ type contextFactory struct {
 // by the supplied unit's supplied API connection.
 func NewContextFactory(
 	state *caasoperator.State,
-	caasUnitTag names.UnitTag,
-	tracker leadership.Tracker,
+	tag names.ApplicationTag,
 	getRelationInfos RelationsFunc,
-
 	paths Paths,
 	clock clock.Clock,
 ) (
 	ContextFactory, error,
 ) {
-	caasUnit, err := state.CAASUnit(caasUnitTag)
+	app, err := state.CAASApplication(tag)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -95,13 +91,11 @@ func NewContextFactory(
 	}
 
 	f := &contextFactory{
-		caasUnit:  caasUnit,
-		state:     state,
-		tracker:   tracker,
-		paths:     paths,
-		modelUUID: model.UUID(),
-		envName:   model.Name(),
-		//		machineTag:       machineTag,
+		app:              app,
+		state:            state,
+		paths:            paths,
+		modelUUID:        model.UUID(),
+		envName:          model.Name(),
 		getRelationInfos: getRelationInfos,
 		relationCaches:   map[int]*RelationCache{},
 		rand:             rand.New(rand.NewSource(time.Now().Unix())),
@@ -113,7 +107,7 @@ func NewContextFactory(
 // newId returns a probably-unique identifier for a new context, containing the
 // supplied string.
 func (f *contextFactory) newId(name string) string {
-	return fmt.Sprintf("%s-%s-%d", f.caasUnit.Name(), name, f.rand.Int63())
+	return fmt.Sprintf("%s-%s-%d", f.app.Name(), name, f.rand.Int63())
 }
 
 // coreContext creates a new context with all unspecialised fields filled in.
@@ -123,12 +117,12 @@ func (f *contextFactory) coreContext() (*HookContext, error) {
 		f.tracker,
 	)
 	ctx := &HookContext{
-		caasUnit:          f.caasUnit,
+		app:               f.app,
 		state:             f.state,
 		LeadershipContext: leadershipContext,
 		uuid:              f.modelUUID,
 		envName:           f.envName,
-		applicationName:   f.caasUnit.Name(),
+		applicationName:   f.app.Name(),
 		relations:         f.getContextRelations(),
 		relationId:        -1,
 		pendingPorts:      make(map[PortRange]PortRangeInfo),
@@ -228,45 +222,46 @@ func (f *contextFactory) getContextRelations() map[int]*ContextRelation {
 // to via hooks. Furthermore, the fact that we make multiple API calls at this
 // time, rather than grabbing everything we need in one go, is unforgivably yucky.
 func (f *contextFactory) updateContext(ctx *HookContext) (err error) {
-	defer errors.Trace(err)
+	// XXX
+	// defer errors.Trace(err)
 
-	ctx.apiAddrs, err = f.state.APIAddresses()
-	if err != nil {
-		return err
-	}
-	ctx.machinePorts, err = f.state.AllMachinePorts(f.machineTag)
-	if err != nil {
-		return errors.Trace(err)
-	}
+	// ctx.apiAddrs, err = f.state.APIAddresses()
+	// if err != nil {
+	// 	return err
+	// }
+	// // ctx.machinePorts, err = f.state.AllMachinePorts(f.machineTag)
+	// // if err != nil {
+	// // 	return errors.Trace(err)
+	// // }
 
-	statusCode, statusInfo, err := f.caasUnit.MeterStatus()
-	if err != nil {
-		return errors.Annotate(err, "could not retrieve meter status for unit")
-	}
-	ctx.meterStatus = &meterStatus{
-		code: statusCode,
-		info: statusInfo,
-	}
+	// statusCode, statusInfo, err := f.caasUnit.MeterStatus()
+	// if err != nil {
+	// 	return errors.Annotate(err, "could not retrieve meter status for unit")
+	// }
+	// ctx.meterStatus = &meterStatus{
+	// 	code: statusCode,
+	// 	info: statusInfo,
+	// }
 
-	// TODO(fwereade) 23-10-2014 bug 1384572
-	// Nothing here should ever be getting the environ config directly.
-	modelConfig, err := f.state.ModelConfig()
-	if err != nil {
-		return err
-	}
-	ctx.proxySettings = modelConfig.ProxySettings()
+	// // TODO(fwereade) 23-10-2014 bug 1384572
+	// // Nothing here should ever be getting the environ config directly.
+	// modelConfig, err := f.state.ModelConfig()
+	// if err != nil {
+	// 	return err
+	// }
+	// ctx.proxySettings = modelConfig.ProxySettings()
 
-	// Calling these last, because there's a potential race: they're not guaranteed
-	// to be set in time to be needed for a hook. If they're not, we just leave them
-	// unset as we always have; this isn't great but it's about behaviour preservation.
-	ctx.publicAddress, err = f.caasUnit.PublicAddress()
-	if err != nil && !params.IsCodeNoAddressSet(err) {
-		return err
-	}
-	ctx.privateAddress, err = f.caasUnit.PrivateAddress()
-	if err != nil && !params.IsCodeNoAddressSet(err) {
-		return err
-	}
+	// // Calling these last, because there's a potential race: they're not guaranteed
+	// // to be set in time to be needed for a hook. If they're not, we just leave them
+	// // unset as we always have; this isn't great but it's about behaviour preservation.
+	// ctx.publicAddress, err = f.caasUnit.PublicAddress()
+	// if err != nil && !params.IsCodeNoAddressSet(err) {
+	// 	return err
+	// }
+	// ctx.privateAddress, err = f.caasUnit.PrivateAddress()
+	// if err != nil && !params.IsCodeNoAddressSet(err) {
+	// 	return err
+	// }
 	return nil
 }
 
