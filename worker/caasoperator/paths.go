@@ -10,8 +10,6 @@ import (
 
 	"github.com/juju/utils/os"
 	"gopkg.in/juju/names.v2"
-
-	"github.com/juju/juju/agent/tools"
 )
 
 // Paths represents the set of filesystem paths a caasoperator worker has reason to
@@ -137,7 +135,8 @@ func NewWorkerPaths(dataDir string, caasoperatortag names.ApplicationTag, worker
 		return path
 	}
 
-	toolsDir := tools.ToolsDir(dataDir, caasoperatortag.String())
+	// The caasoperator image has jujud in /bin
+	toolsDir := "/bin"
 	return Paths{
 		ToolsDir: filepath.FromSlash(toolsDir),
 		Runtime: RuntimePaths{
