@@ -282,7 +282,7 @@ func (e *errWithStackTrace) StackTrace() []string {
 func runSafely(f func() error) (err error) {
 	defer func() {
 		if panicResult := recover(); panicResult != nil {
-			err = errors.Errorf("panic resulted in: %v", panicResult)
+			err = errors.Errorf("panic resulted in: %v\n%s", panicResult, string(debug.Stack()))
 			err = &errWithStackTrace{err, string(debug.Stack())}
 		}
 	}()
