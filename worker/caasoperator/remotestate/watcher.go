@@ -13,7 +13,6 @@ import (
 	"gopkg.in/juju/worker.v1"
 
 	"github.com/juju/juju/apiserver/params"
-	"github.com/juju/juju/core/leadership"
 	"github.com/juju/juju/watcher"
 	jworker "github.com/juju/juju/worker"
 	"github.com/juju/juju/worker/catacomb"
@@ -32,7 +31,6 @@ type RemoteStateWatcher struct {
 	relationUnitsChanges      chan relationUnitsChange
 	storageAttachmentWatchers map[names.StorageTag]*storageAttachmentWatcher
 	storageAttachmentChanges  chan storageAttachmentChange
-	leadershipTracker         leadership.Tracker
 	updateStatusChannel       func() <-chan time.Time
 	commandChannel            <-chan string
 	retryHookChannel          <-chan struct{}
@@ -48,7 +46,6 @@ type RemoteStateWatcher struct {
 // remote state watcher.
 type WatcherConfig struct {
 	State               State
-	LeadershipTracker   leadership.Tracker
 	UpdateStatusChannel func() <-chan time.Time
 	CommandChannel      <-chan string
 	RetryHookChannel    <-chan struct{}
@@ -64,7 +61,6 @@ func NewWatcher(config WatcherConfig) (*RemoteStateWatcher, error) {
 		relationUnitsChanges:      make(chan relationUnitsChange),
 		storageAttachmentWatchers: make(map[names.StorageTag]*storageAttachmentWatcher),
 		storageAttachmentChanges:  make(chan storageAttachmentChange),
-		leadershipTracker:         config.LeadershipTracker,
 		updateStatusChannel:       config.UpdateStatusChannel,
 		commandChannel:            config.CommandChannel,
 		retryHookChannel:          config.RetryHookChannel,
@@ -195,15 +191,15 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 	// }
 	// requiredEvents++
 
-	var seenRelationsChange bool
-	relationsw, err := w.service.WatchRelations()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if err := w.catacomb.Add(relationsw); err != nil {
-		return errors.Trace(err)
-	}
-	requiredEvents++
+	// var seenRelationsChange bool
+	// relationsw, err := w.service.WatchRelations()
+	// if err != nil {
+	// 	return errors.Trace(err)
+	// }
+	// if err := w.catacomb.Add(relationsw); err != nil {
+	// 	return errors.Trace(err)
+	// }
+	// requiredEvents++
 
 	// var seenAddressesChange bool
 	// addressesw, err := w.unit.WatchAddresses()
@@ -215,16 +211,6 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 	// }
 	// requiredEvents++
 
-	var seenLeaderSettingsChange bool
-	leaderSettingsw, err := w.service.WatchLeadershipSettings()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if err := w.catacomb.Add(leaderSettingsw); err != nil {
-		return errors.Trace(err)
-	}
-	requiredEvents++
-
 	// var seenActionsChange bool
 	// actionsw, err := w.unit.WatchActionNotifications()
 	// if err != nil {
@@ -233,11 +219,6 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 	// if err := w.catacomb.Add(actionsw); err != nil {
 	// 	return errors.Trace(err)
 	// }
-	// requiredEvents++
-
-	// var seenLeadershipChange bool
-	// // There's no watcher for this per se; we wait on a channel
-	// // returned by the leadership tracker.
 	// requiredEvents++
 
 	var eventsObserved int
@@ -259,24 +240,6 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 		default:
 		}
 	}
-
-	// // Check the initial leadership status, and then we can flip-flop
-	// // waiting on leader or minion to trigger the changed event.
-	// var waitLeader, waitMinion <-chan struct{}
-	// claimLeader := w.leadershipTracker.ClaimLeader()
-	// select {
-	// case <-w.catacomb.Dying():
-	// 	return w.catacomb.ErrDying()
-	// case <-claimLeader.Ready():
-	// 	isLeader := claimLeader.Wait()
-	// 	w.leadershipChanged(isLeader)
-	// 	if isLeader {
-	// 		waitMinion = w.leadershipTracker.WaitMinion().Ready()
-	// 	} else {
-	// 		waitLeader = w.leadershipTracker.WaitLeader().Ready()
-	// 	}
-	// 	observedEvent(&seenLeadershipChange)
-	// }
 
 	for {
 		select {
@@ -323,16 +286,6 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 		// 	}
 		// 	observedEvent(&seenAddressesChange)
 
-		case _, ok := <-leaderSettingsw.Changes():
-			logger.Debugf("got leader settings change: ok=%t", ok)
-			if !ok {
-				return errors.New("leader settings watcher closed")
-			}
-			if err := w.leaderSettingsChanged(); err != nil {
-				return errors.Trace(err)
-			}
-			observedEvent(&seenLeaderSettingsChange)
-
 		// case actions, ok := <-actionsw.Changes():
 		// 	logger.Debugf("got action change: %v ok=%t", actions, ok)
 		// 	if !ok {
@@ -343,15 +296,15 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 		// 	}
 		// 	observedEvent(&seenActionsChange)
 
-		case keys, ok := <-relationsw.Changes():
-			logger.Debugf("got relations change: ok=%t", ok)
-			if !ok {
-				return errors.New("relations watcher closed")
-			}
-			if err := w.relationsChanged(keys); err != nil {
-				return errors.Trace(err)
-			}
-			observedEvent(&seenRelationsChange)
+		// case keys, ok := <-relationsw.Changes():
+		// 	logger.Debugf("got relations change: ok=%t", ok)
+		// 	if !ok {
+		// 		return errors.New("relations watcher closed")
+		// 	}
+		// 	if err := w.relationsChanged(keys); err != nil {
+		// 		return errors.Trace(err)
+		// 	}
+		// 	observedEvent(&seenRelationsChange)
 
 		// case keys, ok := <-storagew.Changes():
 		// 	logger.Debugf("got storage change: %v ok=%t", keys, ok)
@@ -362,22 +315,6 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 		// 		return errors.Trace(err)
 		// 	}
 		// 	observedEvent(&seenStorageChange)
-
-		// case <-waitMinion:
-		// 	logger.Debugf("got leadership change: minion")
-		// 	if err := w.leadershipChanged(false); err != nil {
-		// 		return errors.Trace(err)
-		// 	}
-		// 	waitMinion = nil
-		// 	waitLeader = w.leadershipTracker.WaitLeader().Ready()
-
-		// case <-waitLeader:
-		// 	logger.Debugf("got leadership change: leader")
-		// 	if err := w.leadershipChanged(true); err != nil {
-		// 		return errors.Trace(err)
-		// 	}
-		// 	waitLeader = nil
-		// 	waitMinion = w.leadershipTracker.WaitMinion().Ready()
 
 		// case change := <-w.storageAttachmentChanges:
 		// 	logger.Debugf("storage attachment change %v", change)
@@ -492,20 +429,6 @@ func (w *RemoteStateWatcher) configChanged() error {
 func (w *RemoteStateWatcher) addressesChanged() error {
 	w.mu.Lock()
 	w.current.ConfigVersion++
-	w.mu.Unlock()
-	return nil
-}
-
-func (w *RemoteStateWatcher) leaderSettingsChanged() error {
-	w.mu.Lock()
-	w.current.LeaderSettingsVersion++
-	w.mu.Unlock()
-	return nil
-}
-
-func (w *RemoteStateWatcher) leadershipChanged(isLeader bool) error {
-	w.mu.Lock()
-	w.current.Leader = isLeader
 	w.mu.Unlock()
 	return nil
 }
