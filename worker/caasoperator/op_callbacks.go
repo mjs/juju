@@ -45,9 +45,6 @@ func (opc *operationCallbacks) PrepareHook(hi hook.Info) (string, error) {
 	case hi.Kind == hooks.ConfigChanged:
 		// TODO(axw)
 		//opc.op.f.DiscardConfigEvent()
-	case hi.Kind == hook.LeaderSettingsChanged:
-		// TODO(axw)
-		//opc.op.f.DiscardLeaderSettingsEvent()
 	}
 	return name, nil
 }

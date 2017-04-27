@@ -48,9 +48,6 @@ type CAASApplication interface {
 	Tag() names.ApplicationTag
 	// Watch returns a watcher that fires when this service changes.
 	Watch() (watcher.NotifyWatcher, error)
-	// WatchLeadershipSettings returns a watcher that fires when the leadership
-	// settings for this service change.
-	WatchLeadershipSettings() (watcher.NotifyWatcher, error)
 	// WatchRelation returns a watcher that fires when the relations on this
 	// service change.
 	WatchRelations() (watcher.StringsWatcher, error)

@@ -14,7 +14,6 @@ import (
 	"gopkg.in/juju/names.v2"
 
 	"github.com/juju/juju/api/caasoperator"
-	"github.com/juju/juju/core/leadership"
 	"github.com/juju/juju/worker/caasoperator/hook"
 )
 
@@ -47,9 +46,8 @@ type RelationsFunc func() map[int]*RelationInfo
 
 type contextFactory struct {
 	// API connection fields; unit should be deprecated, but isn't yet.
-	app     *caasoperator.CAASApplication
-	state   *caasoperator.State
-	tracker leadership.Tracker
+	app   *caasoperator.CAASApplication
+	state *caasoperator.State
 
 	// Fields that shouldn't change in a factory's lifetime.
 	paths     Paths
@@ -112,23 +110,18 @@ func (f *contextFactory) newId(name string) string {
 
 // coreContext creates a new context with all unspecialised fields filled in.
 func (f *contextFactory) coreContext() (*HookContext, error) {
-	leadershipContext := newLeadershipContext(
-		f.state.LeadershipSettings,
-		f.tracker,
-	)
 	ctx := &HookContext{
-		app:               f.app,
-		state:             f.state,
-		LeadershipContext: leadershipContext,
-		uuid:              f.modelUUID,
-		envName:           f.envName,
-		applicationName:   f.app.Name(),
-		relations:         f.getContextRelations(),
-		relationId:        -1,
-		pendingPorts:      make(map[PortRange]PortRangeInfo),
-		clock:             f.clock,
-		componentDir:      f.paths.ComponentDir,
-		componentFuncs:    registeredComponentFuncs,
+		app:             f.app,
+		state:           f.state,
+		uuid:            f.modelUUID,
+		envName:         f.envName,
+		applicationName: f.app.Name(),
+		relations:       f.getContextRelations(),
+		relationId:      -1,
+		pendingPorts:    make(map[PortRange]PortRangeInfo),
+		clock:           f.clock,
+		componentDir:    f.paths.ComponentDir,
+		componentFuncs:  registeredComponentFuncs,
 	}
 	if err := f.updateContext(ctx); err != nil {
 		return nil, err

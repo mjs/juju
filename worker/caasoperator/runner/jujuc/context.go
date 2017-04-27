@@ -41,7 +41,6 @@ type HookContext interface {
 	ContextStatus
 	ContextInstance
 	// ContextNetworking
-	ContextLeadership
 	// ContextMetrics
 	//	ContextStorage
 	ContextComponents
@@ -129,23 +128,6 @@ type ContextNetworking interface {
 	//
 	// LKK Card: https://canonical.leankit.com/Boards/View/101652562/119258804
 	NetworkConfig(bindingName string) ([]params.NetworkConfig, error)
-}
-
-// ContextLeadership is the part of a hook context related to the
-// unit leadership.
-type ContextLeadership interface {
-	// IsLeader returns true if the local unit is known to be leader for at
-	// least the next 30s.
-	IsLeader() (bool, error)
-
-	// LeaderSettings returns the current leader settings. Once leader settings
-	// have been read in a given context, they will not be updated other than
-	// via successful calls to WriteLeaderSettings.
-	LeaderSettings() (map[string]string, error)
-
-	// WriteLeaderSettings writes the supplied settings directly to state, or
-	// fails if the local unit is not the service's leader.
-	WriteLeaderSettings(map[string]string) error
 }
 
 // ContextMetrics is the part of a hook context related to metrics.

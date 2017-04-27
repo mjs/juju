@@ -97,14 +97,6 @@ type Factory interface {
 	// indicated relation context, and pass the results back over the supplied
 	// func.
 	NewCommands(args CommandArgs, sendResponse CommandResponseFunc) (Operation, error)
-
-	// NewAcceptLeadership creates an operation to ensure the caasoperator acts as
-	// service leader.
-	NewAcceptLeadership() (Operation, error)
-
-	// NewResignLeadership creates an operation to ensure the caasoperator does not
-	// act as service leader.
-	NewResignLeadership() (Operation, error)
 }
 
 // CommandArgs stores the arguments for a Command operation.

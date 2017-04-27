@@ -50,7 +50,6 @@ type Paths interface {
 
 var logger = loggo.GetLogger("juju.worker.caasoperator.context")
 var mutex = sync.Mutex{}
-var ErrIsNotLeader = errors.Errorf("this caasoperator is not the leader")
 
 // ComponentConfig holds all the information related to a hook context
 // needed by components.
@@ -96,9 +95,6 @@ type HookContext struct {
 	// over fully to API calls on State.  This adds that ability, but we're
 	// not fully there yet.
 	state *caasoperator.State
-
-	// LeadershipContext supplies several jujuc.Context methods.
-	LeadershipContext
 
 	// privateAddress is the cached value of the caas unit's private
 	// address.
@@ -258,8 +254,7 @@ func (ctx *HookContext) ApplicationName() string {
 }
 
 // ApplicationStatus returns the status for the application and all the caasunits on
-// the service to which this context caasoperator belongs, only if this caasoperator is
-// the leader.
+// the service to which this context caasoperator belongs.
 func (ctx *HookContext) ApplicationStatus() (jujuc.ApplicationStatusInfo, error) {
 	// XXX
 	// var err error
@@ -305,7 +300,7 @@ func (ctx *HookContext) SetCaasUnitStatus(caasUnitStatus jujuc.StatusInfo) error
 }
 
 // SetApplicationStatus will set the given status to the service to which this
-// caasoperator's belong, only if this caasoperator is the leader.
+// caasoperator's belong.
 func (ctx *HookContext) SetApplicationStatus(serviceStatus jujuc.StatusInfo) error {
 	logger.Tracef("[APPLICATION-STATUS] %s: %s", serviceStatus.Status, serviceStatus.Info)
 

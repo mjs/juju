@@ -58,9 +58,6 @@ func Manifold(config ManifoldConfig) dependency.Manifold {
 			}
 			var apiConn api.Connection
 			if err := context.Get(config.APICallerName, &apiConn); err != nil {
-				// TODO(fwereade): absence of an APICaller shouldn't be the end of
-				// the world -- we ought to return a type that can at least run the
-				// leader-deposed hook -- but that's not done yet.
 				return nil, err
 			}
 			var charmDirGuard fortress.Guard
@@ -88,7 +85,6 @@ func Manifold(config ManifoldConfig) dependency.Manifold {
 			caasoperator, err := NewCaasOperator(&CaasOperatorParams{
 				CaasOperatorFacade: caasoperatorFacade,
 				CaasOperatorTag:    caasoperatorTag,
-				//				LeadershipTracker:    leadershipTracker,
 				DataDir:            agentConfig.DataDir(),
 				Downloader:         downloader,
 				MachineLockName:    manifoldConfig.MachineLockName,

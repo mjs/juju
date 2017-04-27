@@ -21,7 +21,6 @@ type ResolverConfig struct {
 	ShouldRetryHooks    bool
 	StartRetryHookTimer func()
 	StopRetryHookTimer  func()
-	Leadership          resolver.Resolver
 	Actions             resolver.Resolver
 	Relations           resolver.Resolver
 	Storage             resolver.Resolver
@@ -73,25 +72,22 @@ func (s *caasoperatorResolver) NextOp(
 		s.retryHookTimerStarted = false
 	}
 
-	op, err := s.config.Leadership.NextOp(localState, remoteState, opFactory)
+	// XXX CAAS
+	// op, err := s.config.Actions.NextOp(localState, remoteState, opFactory)
+	// if errors.Cause(err) != resolver.ErrNoOperation {
+	// 	return op, err
+	// }
+
+	op, err := s.config.Commands.NextOp(localState, remoteState, opFactory)
 	if errors.Cause(err) != resolver.ErrNoOperation {
 		return op, err
 	}
 
-	op, err = s.config.Actions.NextOp(localState, remoteState, opFactory)
-	if errors.Cause(err) != resolver.ErrNoOperation {
-		return op, err
-	}
-
-	op, err = s.config.Commands.NextOp(localState, remoteState, opFactory)
-	if errors.Cause(err) != resolver.ErrNoOperation {
-		return op, err
-	}
-
-	op, err = s.config.Storage.NextOp(localState, remoteState, opFactory)
-	if errors.Cause(err) != resolver.ErrNoOperation {
-		return op, err
-	}
+	// XXX CAAS
+	// op, err = s.config.Storage.NextOp(localState, remoteState, opFactory)
+	// if errors.Cause(err) != resolver.ErrNoOperation {
+	// 	return op, err
+	// }
 
 	switch localState.Kind {
 	case operation.RunHook:
