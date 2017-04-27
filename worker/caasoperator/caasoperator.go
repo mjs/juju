@@ -441,6 +441,7 @@ func (op *CaasOperator) init(caasapplicationtag names.ApplicationTag) (err error
 	if err := charm.ClearDownloads(op.paths.State.BundlesDir); err != nil {
 		logger.Warningf(err.Error())
 	}
+
 	deployer, err := charm.NewDeployer(
 		op.paths.State.CharmDir,
 		op.paths.State.DeployerDir,

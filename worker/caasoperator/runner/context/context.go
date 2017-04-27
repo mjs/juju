@@ -371,8 +371,8 @@ func (context *HookContext) HookVars(paths Paths) ([]string, error) {
 		"JUJU_MODEL_UUID="+context.uuid,
 		"JUJU_MODEL_NAME="+context.envName,
 		"JUJU_API_ADDRESSES="+strings.Join(context.apiAddrs, " "),
-		"JUJU_METER_STATUS="+context.meterStatus.code,
-		"JUJU_METER_INFO="+context.meterStatus.info,
+	// "JUJU_METER_STATUS="+context.meterStatus.code,
+	// "JUJU_METER_INFO="+context.meterStatus.info,
 	)
 	// if r, err := context.HookRelation(); err == nil {
 	// 	vars = append(vars,
