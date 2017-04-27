@@ -1432,6 +1432,11 @@ func (u *Unit) WatchConfigSettings() (NotifyWatcher, error) {
 	return newEntityWatcher(u.st, settingsC, u.st.docID(settingsKey)), nil
 }
 
+// Watch returns a watcher for observing changes to a CAAS application.
+func (a *CAASApplication) Watch() NotifyWatcher {
+	return newEntityWatcher(a.st, caasApplicationsC, a.doc.DocID)
+}
+
 func (app *CAASApplication) WatchConfigSettings() (NotifyWatcher, error) {
 	settingsKey := applicationSettingsKey(app.doc.Name, app.doc.CharmURL)
 	return newEntityWatcher(app.st, settingsC, app.st.docID(settingsKey)), nil
