@@ -23,12 +23,12 @@ var caasUnitLogger = loggo.GetLogger("juju.state.caasunit")
 // caasUnitDoc represents the internal state of a unit in MongoDB.
 // Note the correspondence with UnitInfo in apiserver/params.
 type caasUnitDoc struct {
-	DocID           string `bson:"_id"`
-	Name            string `bson:"name"`
-	ModelUUID       string `bson:"model-uuid"`
-	CAASApplication string
-	Resolved        ResolvedMode
-	Life            Life
+	DocID           string       `bson:"_id"`
+	Name            string       `bson:"name"`
+	ModelUUID       string       `bson:"model-uuid"`
+	CAASApplication string       `bson:"caasapplication"`
+	Resolved        ResolvedMode `bson:"resolved"`
+	Life            Life         `bson:"life"`
 }
 
 // Unit represents the state of a service unit.
