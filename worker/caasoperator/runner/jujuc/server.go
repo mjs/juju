@@ -51,12 +51,6 @@ var baseCommands = map[string]creator{
 	"application-version-set" + cmdSuffix: NewApplicationVersionSetCommand,
 }
 
-var leaderCommands = map[string]creator{
-	"is-leader" + cmdSuffix:  NewIsLeaderCommand,
-	"leader-get" + cmdSuffix: NewLeaderGetCommand,
-	"leader-set" + cmdSuffix: NewLeaderSetCommand,
-}
-
 func allEnabledCommands() map[string]creator {
 	all := map[string]creator{}
 	add := func(m map[string]creator) {
@@ -65,7 +59,6 @@ func allEnabledCommands() map[string]creator {
 		}
 	}
 	add(baseCommands)
-	add(leaderCommands)
 	add(registeredCommands)
 	return all
 }

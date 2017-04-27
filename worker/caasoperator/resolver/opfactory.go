@@ -115,11 +115,6 @@ func (s *resolverOpFactory) wrapHookOp(op operation.Operation, info hook.Info) o
 		op = onCommitWrapper{op, func() {
 			s.LocalState.ConfigVersion = v
 		}}
-	case hooks.LeaderSettingsChanged:
-		v := s.RemoteState.LeaderSettingsVersion
-		op = onCommitWrapper{op, func() {
-			s.LocalState.LeaderSettingsVersion = v
-		}}
 	}
 
 	charmModifiedVersion := s.RemoteState.CharmModifiedVersion

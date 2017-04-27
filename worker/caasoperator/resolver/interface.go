@@ -85,11 +85,6 @@ type LocalState struct {
 	// for which a config-changed hook has been committed.
 	ConfigVersion int
 
-	// LeaderSettingsVersion is the version of leader settings from
-	// remotestate.Snapshot for which a leader-settings-changed hook has
-	// been committed.
-	LeaderSettingsVersion int
-
 	// CompletedActions is the set of actions that have been completed.
 	// This is used to prevent us re running actions requested by the
 	// controller.

@@ -54,11 +54,6 @@ const (
 // State defines the local persistent state of the caasoperator, excluding relation
 // state.
 type State struct {
-
-	// Leader indicates whether a leader-elected hook has been queued to run, and
-	// no more recent leader-deposed hook has completed.
-	Leader bool `yaml:"leader"`
-
 	// Started indicates whether the start hook has run.
 	Started bool `yaml:"started"`
 

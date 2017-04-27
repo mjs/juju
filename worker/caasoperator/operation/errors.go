@@ -11,11 +11,10 @@ import (
 )
 
 var (
-	ErrNoStateFile            = errors.New("caasoperator state file does not exist")
-	ErrSkipExecute            = errors.New("operation already executed")
-	ErrNeedsReboot            = errors.New("reboot request issued")
-	ErrHookFailed             = errors.New("hook failed")
-	ErrCannotAcceptLeadership = errors.New("cannot accept leadership")
+	ErrNoStateFile = errors.New("caasoperator state file does not exist")
+	ErrSkipExecute = errors.New("operation already executed")
+	ErrNeedsReboot = errors.New("reboot request issued")
+	ErrHookFailed  = errors.New("hook failed")
 )
 
 type deployConflictError struct {

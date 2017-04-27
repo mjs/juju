@@ -125,13 +125,3 @@ func (f *factory) NewCommands(args CommandArgs, sendResponse CommandResponseFunc
 		runnerFactory: f.config.RunnerFactory,
 	}, nil
 }
-
-// NewResignLeadership is part of the Factory interface.
-func (f *factory) NewResignLeadership() (Operation, error) {
-	return &resignLeadership{}, nil
-}
-
-// NewAcceptLeadership is part of the Factory interface.
-func (f *factory) NewAcceptLeadership() (Operation, error) {
-	return &acceptLeadership{}, nil
-}
