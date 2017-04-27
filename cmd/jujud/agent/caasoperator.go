@@ -138,7 +138,6 @@ func (op *CaasOperatorAgent) APIWorkers() (worker.Worker, error) {
 	manifolds := caasOperatorManifolds(caasoperator.ManifoldsConfig{
 		Agent:                agent.APIHostPortsSetter{op},
 		LogSource:            op.bufferedLogger.Logs(),
-		LeadershipGuarantee:  30 * time.Second,
 		AgentConfigChanged:   op.configChangedVal,
 		PrometheusRegisterer: op.prometheusRegistry,
 	})

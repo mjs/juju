@@ -4,8 +4,6 @@
 package caasoperator
 
 import (
-	"time"
-
 	"github.com/juju/utils/clock"
 	"github.com/juju/utils/voyeur"
 	"github.com/prometheus/client_golang/prometheus"
@@ -20,7 +18,6 @@ import (
 	"github.com/juju/juju/worker/dependency"
 	"github.com/juju/juju/worker/fortress"
 	//	"github.com/juju/juju/worker/fortress"
-	//"github.com/juju/juju/worker/leadership"
 
 	"github.com/juju/juju/worker/logsender"
 	//	"github.com/juju/juju/worker/meterstatus"
@@ -42,9 +39,6 @@ type ManifoldsConfig struct {
 
 	// LogSource will be read from by the logsender component.
 	LogSource logsender.LogRecordCh
-
-	// LeadershipGuarantee controls the behaviour of the leadership tracker.
-	LeadershipGuarantee time.Duration
 
 	// AgentConfigChanged is set whenever the unit agent's config
 	// is updated.
@@ -135,17 +129,6 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 		// executes, and not during upgrades.
 		charmDirName: fortress.Manifold(),
 
-		// // The leadership tracker attempts to secure and retain leadership of
-		// // the unit's service, and is consulted on such matters by the
-		// // uniter. As it stannds today, we'll need one per unit in a
-		// // consolidated agent.
-		// leadershipTrackerName: leadership.Manifold(leadership.ManifoldConfig{
-		// 	AgentName:           agentName,
-		// 	APICallerName:       apiCallerName,
-		// 	Clock:               clock.WallClock,
-		// 	LeadershipGuarantee: config.LeadershipGuarantee,
-		// })),
-
 		// HookRetryStrategy uses a retrystrategy worker to get a
 		// retry strategy that will be used by the caasoperator to run its hooks.
 		// hookRetryStrategyName: retrystrategy.Manifold(retrystrategy.ManifoldConfig{
@@ -215,7 +198,6 @@ const (
 	apiAddressUpdaterName    = "api-address-updater"
 
 	charmDirName          = "charm-dir"
-	leadershipTrackerName = "leadership-tracker"
 	hookRetryStrategyName = "hook-retry-strategy"
 	operatorName          = "operator"
 
