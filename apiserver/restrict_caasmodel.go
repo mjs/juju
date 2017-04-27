@@ -14,6 +14,7 @@ import (
 // and IAAS models.
 var commonModelFacadeNames = set.NewStrings(
 	"Charms",
+	"Cleaner",
 	"Pinger",
 )
 

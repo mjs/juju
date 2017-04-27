@@ -686,6 +686,10 @@ func (st *State) cleanupAttachmentsForDyingFilesystem(filesystemId string) (err 
 	return nil
 }
 
+func (st *CAASState) Cleanup() (err error) {
+	return errors.New("unimplemented")
+}
+
 func closeIter(iter *mgo.Iter, errOut *error, message string) {
 	err := iter.Close()
 	if err == nil {
