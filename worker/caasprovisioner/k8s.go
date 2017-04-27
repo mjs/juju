@@ -128,7 +128,8 @@ func deployOperator(client *kubernetes.Clientset, appName string, configMapName 
 				VolumeMounts: []v1.VolumeMount{{
 					Name: configVolName,
 					// XXX shouldn't be hardcoded
-					MountPath: "/var/lib/juju/agents/" + appTag.String(),
+					MountPath: "/var/lib/juju/agents/" + appTag.String() + "/agent.conf",
+					SubPath:   "agent.conf",
 				}},
 			}},
 			Volumes: []v1.Volume{{
@@ -138,6 +139,10 @@ func deployOperator(client *kubernetes.Clientset, appName string, configMapName 
 						LocalObjectReference: v1.LocalObjectReference{
 							Name: configMapName,
 						},
+						Items: []v1.KeyToPath{{
+							Key:  "agent.conf",
+							Path: "agent.conf",
+						}},
 					},
 				},
 			}},
