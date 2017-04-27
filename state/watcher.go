@@ -2728,6 +2728,11 @@ func (st *CAASState) WatchApplications() StringsWatcher {
 	return newLifecycleWatcher(st, caasApplicationsC, nil, isLocalID(st), nil)
 }
 
+// WatchCleanups starts and returns a CleanupWatcher.
+func (st *CAASState) WatchCleanups() NotifyWatcher {
+	return newNotifyCollWatcher(st, cleanupsC, isLocalID(st))
+}
+
 // isLocalID returns a watcher filter func that rejects ids not specific
 // to the supplied modelBackend.
 func isLocalID(st modelBackend) func(interface{}) bool {
