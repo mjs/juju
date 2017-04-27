@@ -189,22 +189,23 @@ func (f *contextFactory) CommandContext(commandInfo CommandInfo) (*HookContext, 
 // to construct ContextRelations for a fresh context.
 func (f *contextFactory) getContextRelations() map[int]*ContextRelation {
 	contextRelations := map[int]*ContextRelation{}
-	relationInfos := f.getRelationInfos()
-	relationCaches := map[int]*RelationCache{}
-	for id, info := range relationInfos {
-		relationUnit := info.RelationUnit
-		memberNames := info.MemberNames
-		cache, found := f.relationCaches[id]
-		if found {
-			cache.Prune(memberNames)
-		} else {
-			cache = NewRelationCache(relationUnit.ReadSettings, memberNames)
-		}
-		relationCaches[id] = cache
-		contextRelations[id] = NewContextRelation(relationUnit, cache)
-	}
-	f.relationCaches = relationCaches
-	return contextRelations
+	return contextRelations // XXX CAAS
+	// relationInfos := f.getRelationInfos()
+	// relationCaches := map[int]*RelationCache{}
+	// for id, info := range relationInfos {
+	// 	relationUnit := info.RelationUnit
+	// 	memberNames := info.MemberNames
+	// 	cache, found := f.relationCaches[id]
+	// 	if found {
+	// 		cache.Prune(memberNames)
+	// 	} else {
+	// 		cache = NewRelationCache(relationUnit.ReadSettings, memberNames)
+	// 	}
+	// 	relationCaches[id] = cache
+	// 	contextRelations[id] = NewContextRelation(relationUnit, cache)
+	// }
+	// f.relationCaches = relationCaches
+	// return contextRelations
 }
 
 // updateContext fills in all unspecialized fields that require an API call to
