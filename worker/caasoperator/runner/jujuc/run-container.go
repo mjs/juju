@@ -41,7 +41,7 @@ func (c *RunContainerCommand) SetFlags(f *gnuflag.FlagSet) {
 }
 
 func (c *RunContainerCommand) Init(args []string) error {
-	if len(args) < 4 {
+	if len(args) != 4 {
 		return errors.Errorf("invalid args, requires <name> <args> <env> <image>")
 	}
 	c.name = args[0]
