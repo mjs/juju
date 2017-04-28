@@ -26,9 +26,8 @@ func NewRunContainerCommand(ctx Context) (cmd.Command, error) {
 
 func (c *RunContainerCommand) Info() *cmd.Info {
 	doc := `
-Sets the workload status of the charm. Message is optional.
-The "last updated" attribute of the status is set, even if the
-status and message are the same as what's already set.
+Asks the container runtime to start a container with the specified
+arguments, environment and image.
 `
 	return &cmd.Info{
 		Name:    "run-container",
