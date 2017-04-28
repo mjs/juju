@@ -14,3 +14,17 @@ type CAASApplicationDeploy struct {
 	ConfigYAML      string `json:"config-yaml"` // Takes precedence over config if both are present.
 	NumUnits        int    `json:"num-units"`
 }
+
+type AllCAASUnitsResults struct {
+	Results []CAASUnits
+}
+
+type CAASUnits struct {
+	Error *Error     `json:"error,omitempty"`
+	Units []CAASUnit `json:"units"`
+}
+
+type CAASUnit struct {
+	Tag  string `json:"tag"`
+	Life Life   `json:"life"`
+}
