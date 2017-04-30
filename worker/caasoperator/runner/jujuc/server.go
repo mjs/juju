@@ -50,6 +50,7 @@ var baseCommands = map[string]creator{
 	"status-set" + cmdSuffix:              NewStatusSetCommand,
 	"application-version-set" + cmdSuffix: NewApplicationVersionSetCommand,
 	"run-container" + cmdSuffix:           NewRunContainerCommand,
+	"kill-container" + cmdSuffix:          NewKillContainerCommand,
 }
 
 func allEnabledCommands() map[string]creator {

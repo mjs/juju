@@ -304,20 +304,19 @@ func (ctx *HookContext) SetCaasUnitStatus(caasUnitStatus jujuc.StatusInfo) error
 }
 
 func (ctx *HookContext) RunContainer(containerInfo jujuc.ContainerInfo) error {
-
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
 
 	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
 
 	logger.Debugf("deploying image %v", containerInfo)
 
-	containerName := ctx.applicationName + "-" + containerInfo.Name
+	containerName := ctx.podName(containerInfo.Name)
 	spec := &v1.Pod{
 		ObjectMeta: v1.ObjectMeta{
 			Name: containerName,
@@ -336,7 +335,23 @@ func (ctx *HookContext) RunContainer(containerInfo jujuc.ContainerInfo) error {
 	}
 	_, err = client.CoreV1().Pods("default").Create(spec) // XXX TODO namespace
 	return errors.Trace(err)
+}
 
+func (ctx *HookContext) KillContainer(name string) error {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return err
+	}
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	err = client.CoreV1().Pods("default").Delete(ctx.podName(name), nil)
+	return errors.Trace(err)
+}
+
+func (ctx *HookContext) podName(name string) string {
+	return ctx.applicationName + "-" + name
 }
 
 // SetApplicationStatus will set the given status to the service to which this

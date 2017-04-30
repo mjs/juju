@@ -74,6 +74,7 @@ type ContextCAASApplication interface {
 	ApplicationName() string
 	ConfigSettings() (charm.Settings, error)
 	RunContainer(ContainerInfo) error
+	KillContainer(string) error
 }
 
 // ContextStatus is the part of a hook context related to the unit's status.
