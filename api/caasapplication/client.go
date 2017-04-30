@@ -113,7 +113,7 @@ func (c *Client) DestroyApplications(appNames ...string) ([]params.DestroyApplic
 	return allResults, nil
 }
 
-func (c *Client) AddUnits(appName string, numUnits int) ([]string, error) {
+func (c *Client) AddCAASUnits(appName string, numUnits int) ([]string, error) {
 	args := params.AddApplicationUnits{
 		ApplicationName: appName,
 		NumUnits:        numUnits,
