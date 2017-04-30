@@ -112,3 +112,15 @@ func (c *Client) DestroyApplications(appNames ...string) ([]params.DestroyApplic
 	}
 	return allResults, nil
 }
+
+func (c *Client) AddUnits(appName string, numUnits int) ([]string, error) {
+	args := params.AddApplicationUnits{
+		ApplicationName: appName,
+		NumUnits:        numUnits,
+	}
+	var result params.AddApplicationUnitsResults
+	if err := c.facade.FacadeCall("AddUnits", args, &result); err != nil {
+		return nil, errors.Trace(err)
+	}
+	return result.Units, nil
+}
