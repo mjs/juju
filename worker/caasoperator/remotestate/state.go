@@ -22,18 +22,6 @@ type State interface {
 	// WatchStorageAttachment(names.StorageTag, names.UnitTag) (watcher.NotifyWatcher, error)
 }
 
-type CAASUnit interface {
-	Life() params.Life
-	Refresh() error
-	Resolved() (params.ResolvedMode, error)
-	CAASApplication() (CAASApplication, error)
-	Tag() names.UnitTag
-	Watch() (watcher.NotifyWatcher, error)
-	WatchAddresses() (watcher.NotifyWatcher, error)
-	WatchConfigSettings() (watcher.NotifyWatcher, error)
-	WatchActionNotifications() (watcher.StringsWatcher, error)
-}
-
 type CAASApplication interface {
 	// CharmModifiedVersion returns a revision number for the charm that
 	// increments whenever the charm or a resource for the charm changes.
@@ -46,11 +34,24 @@ type CAASApplication interface {
 	Refresh() error
 	// Tag returns the tag for this service.
 	Tag() names.ApplicationTag
+
 	// Watch returns a watcher that fires when this service changes.
 	Watch() (watcher.NotifyWatcher, error)
+
+	// Watch returns a watcher that fires when the application's units change
+	WatchUnits() (watcher.StringsWatcher, error)
+
+	AllCAASUnits() ([]CAASUnit, error)
+
 	// WatchRelation returns a watcher that fires when the relations on this
 	// service change.
 	WatchRelations() (watcher.StringsWatcher, error)
+}
+
+type CAASUnit interface {
+	Tag() names.UnitTag
+	Name() string
+	Life() params.Life
 }
 
 type Relation interface {
@@ -66,12 +67,12 @@ type apiState struct {
 	*caasoperator.State
 }
 
-type apiCaasUnit struct {
-	*caasoperator.CAASUnit
+type apiCAASApplication struct {
+	*caasoperator.CAASApplication
 }
 
-type apiService struct {
-	*caasoperator.CAASApplication
+type apiCAASUnit struct {
+	*caasoperator.CAASUnit
 }
 
 type apiRelation struct {
@@ -83,17 +84,29 @@ func (st apiState) Relation(tag names.RelationTag) (Relation, error) {
 	return apiRelation{r}, err
 }
 
+func (app apiCAASApplication) AllCAASUnits() ([]CAASUnit, error) {
+	units, err := app.AllCAASUnits()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]CAASUnit, 0, len(units))
+	for _, unit := range units {
+		out = append(out, unit)
+	}
+	return out, nil
+}
+
 func (st apiState) CAASUnit(tag names.UnitTag) (CAASUnit, error) {
 	u, err := st.State.CAASUnit(tag) // XXX todo multiple units
-	return apiCaasUnit{u}, err
+	return apiCAASUnit{u}, err
 }
 
 func (st apiState) CAASApplication(tag names.ApplicationTag) (CAASApplication, error) {
 	s, err := st.State.CAASApplication(tag)
-	return apiService{s}, err
+	return apiCAASApplication{s}, err
 }
 
-func (u apiCaasUnit) CAASApplication() (CAASApplication, error) {
+func (u apiCAASUnit) CAASApplication() (CAASApplication, error) {
 	s, err := u.CAASUnit.CAASApplication()
-	return apiService{s}, err
+	return apiCAASApplication{s}, err
 }
