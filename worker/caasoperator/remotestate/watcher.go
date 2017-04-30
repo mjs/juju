@@ -10,7 +10,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/juju/loggo"
 	"gopkg.in/juju/names.v2"
-	"gopkg.in/juju/worker.v1"
 
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/watcher"
@@ -25,8 +24,7 @@ var logger = loggo.GetLogger("juju.worker.caasoperator.remotestate")
 // channel upon change.
 type RemoteStateWatcher struct {
 	st                        State
-	caasUnit                  CAASUnit
-	service                   CAASApplication
+	app                       CAASApplication
 	relations                 map[names.RelationTag]*relationUnitsWatcher
 	relationUnitsChanges      chan relationUnitsChange
 	storageAttachmentWatchers map[names.StorageTag]*storageAttachmentWatcher
@@ -157,7 +155,7 @@ func (w *RemoteStateWatcher) setUp(applicationtag names.ApplicationTag) (err err
 		}
 	}()
 
-	w.service, err = w.st.CAASApplication(applicationtag)
+	w.app, err = w.st.CAASApplication(applicationtag)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -172,11 +170,21 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 	var requiredEvents int
 
 	var seenApplicationChange bool
-	servicew, err := w.service.Watch()
+	appw, err := w.app.Watch()
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if err := w.catacomb.Add(servicew); err != nil {
+	if err := w.catacomb.Add(appw); err != nil {
+		return errors.Trace(err)
+	}
+	requiredEvents++
+
+	var seenUnitsChange bool
+	unitsw, err := w.app.WatchUnits()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if err := w.catacomb.Add(unitsw); err != nil {
 		return errors.Trace(err)
 	}
 	requiredEvents++
@@ -192,7 +200,7 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 	// requiredEvents++
 
 	// var seenRelationsChange bool
-	// relationsw, err := w.service.WatchRelations()
+	// relationsw, err := w.app.WatchRelations()
 	// if err != nil {
 	// 	return errors.Trace(err)
 	// }
@@ -246,25 +254,25 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 		case <-w.catacomb.Dying():
 			return w.catacomb.ErrDying()
 
-		// case _, ok := <-unitw.Changes():
-		// 	logger.Debugf("got unit change")
-		// 	if !ok {
-		// 		return errors.New("unit watcher closed")
-		// 	}
-		// 	if err := w.unitChanged(); err != nil {
-		// 		return errors.Trace(err)
-		// 	}
-		// 	observedEvent(&seenUnitChange)
-
-		case _, ok := <-servicew.Changes():
-			logger.Debugf("got service change")
+		case _, ok := <-appw.Changes():
+			logger.Debugf("got app change")
 			if !ok {
-				return errors.New("service watcher closed")
+				return errors.New("app watcher closed")
 			}
 			if err := w.applicationChanged(); err != nil {
 				return errors.Trace(err)
 			}
 			observedEvent(&seenApplicationChange)
+
+		case _, ok := <-unitsw.Changes():
+			logger.Debugf("got units change")
+			if !ok {
+				return errors.New("units watcher closed")
+			}
+			if err := w.unitsChanged(); err != nil {
+				return errors.Trace(err)
+			}
+			observedEvent(&seenUnitsChange)
 
 		// case _, ok := <-configw.Changes():
 		// 	logger.Debugf("got config change: ok=%t", ok)
@@ -382,32 +390,25 @@ func (w *RemoteStateWatcher) retryHookTimerTriggered() error {
 	return nil
 }
 
-// unitChanged responds to changes in the unit.
-func (w *RemoteStateWatcher) unitChanged() error {
-	if err := w.caasUnit.Refresh(); err != nil {
-		return errors.Trace(err)
-	}
-	resolved, err := w.caasUnit.Resolved()
-	if err != nil {
-		return errors.Trace(err)
-	}
+// unitsChanged responds to changes any of the application's CAAS units.
+func (w *RemoteStateWatcher) unitsChanged() error {
+	// XXX CAAS this probably warrants its own hook but just trigger config-changed for now
 	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.current.Life = w.caasUnit.Life()
-	w.current.ResolvedMode = resolved
+	w.current.ConfigVersion++
+	w.mu.Unlock()
 	return nil
 }
 
 // applicationChanged responds to changes in the application.
 func (w *RemoteStateWatcher) applicationChanged() error {
-	if err := w.service.Refresh(); err != nil {
+	if err := w.app.Refresh(); err != nil {
 		return errors.Trace(err)
 	}
-	url, force, err := w.service.CharmURL()
+	url, force, err := w.app.CharmURL()
 	if err != nil {
 		return errors.Trace(err)
 	}
-	ver, err := w.service.CharmModifiedVersion()
+	ver, err := w.app.CharmModifiedVersion()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -433,45 +434,46 @@ func (w *RemoteStateWatcher) addressesChanged() error {
 	return nil
 }
 
-// relationsChanged responds to service relation changes.
+// relationsChanged responds to app relation changes.
 func (w *RemoteStateWatcher) relationsChanged(keys []string) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	for _, key := range keys {
-		relationTag := names.NewRelationTag(key)
-		rel, err := w.st.Relation(relationTag)
-		if params.IsCodeNotFoundOrCodeUnauthorized(err) {
-			// If it's actually gone, this unit cannot have entered
-			// scope, and therefore never needs to know about it.
-			if ruw, ok := w.relations[relationTag]; ok {
-				worker.Stop(ruw)
-				delete(w.relations, relationTag)
-				delete(w.current.Relations, ruw.relationId)
-			}
-		} else if err != nil {
-			return errors.Trace(err)
-		} else {
-			if _, ok := w.relations[relationTag]; ok {
-				relationSnapshot := w.current.Relations[rel.Id()]
-				relationSnapshot.Life = rel.Life()
-				w.current.Relations[rel.Id()] = relationSnapshot
-				continue
-			}
-			ruw, err := w.st.WatchRelationUnits(relationTag, w.caasUnit.Tag())
-			if err != nil {
-				return errors.Trace(err)
-			}
-			// Because of the delay before handing off responsibility to
-			// newRelationUnitsWatcher below, add to our own catacomb to
-			// ensure errors get picked up if they happen.
-			if err := w.catacomb.Add(ruw); err != nil {
-				return errors.Trace(err)
-			}
-			if err := w.watchRelationUnits(rel, relationTag, ruw); err != nil {
-				return errors.Trace(err)
-			}
-		}
-	}
+	// XXX CAAS
+	// w.mu.Lock()
+	// defer w.mu.Unlock()
+	// for _, key := range keys {
+	// 	relationTag := names.NewRelationTag(key)
+	// 	rel, err := w.st.Relation(relationTag)
+	// 	if params.IsCodeNotFoundOrCodeUnauthorized(err) {
+	// 		// If it's actually gone, this unit cannot have entered
+	// 		// scope, and therefore never needs to know about it.
+	// 		if ruw, ok := w.relations[relationTag]; ok {
+	// 			worker.Stop(ruw)
+	// 			delete(w.relations, relationTag)
+	// 			delete(w.current.Relations, ruw.relationId)
+	// 		}
+	// 	} else if err != nil {
+	// 		return errors.Trace(err)
+	// 	} else {
+	// 		if _, ok := w.relations[relationTag]; ok {
+	// 			relationSnapshot := w.current.Relations[rel.Id()]
+	// 			relationSnapshot.Life = rel.Life()
+	// 			w.current.Relations[rel.Id()] = relationSnapshot
+	// 			continue
+	// 		}
+	// 		ruw, err := w.st.WatchRelationUnits(relationTag, w.caasUnit.Tag())
+	// 		if err != nil {
+	// 			return errors.Trace(err)
+	// 		}
+	// 		Because of the delay before handing off responsibility to
+	// 		newRelationUnitsWatcher below, add to our own catacomb to
+	// 		ensure errors get picked up if they happen.
+	// 		if err := w.catacomb.Add(ruw); err != nil {
+	// 			return errors.Trace(err)
+	// 		}
+	// 		if err := w.watchRelationUnits(rel, relationTag, ruw); err != nil {
+	// 			return errors.Trace(err)
+	// 		}
+	// 	}
+	// }
 	return nil
 }
 
