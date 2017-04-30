@@ -145,3 +145,36 @@ func (facade *Facade) DestroyApplication(args params.Entities) (params.DestroyAp
 	}
 	return params.DestroyApplicationResults{results}, nil
 }
+
+// AddUnits adds a given number of units to an application.
+func (facade *Facade) AddUnits(args params.AddApplicationUnits) (params.AddApplicationUnitsResults, error) {
+	units, err := addApplicationUnits(facade.backend, args)
+	if err != nil {
+		return params.AddApplicationUnitsResults{}, errors.Trace(err)
+	}
+	unitNames := make([]string, len(units))
+	for i, unit := range units {
+		unitNames[i] = unit.Name()
+	}
+	return params.AddApplicationUnitsResults{Units: unitNames}, nil
+}
+
+// addApplicationUnits adds a given number of units to an application.
+func addApplicationUnits(backend *state.CAASState, args params.AddApplicationUnits) ([]*state.CAASUnit, error) {
+	application, err := backend.CAASApplication(args.ApplicationName)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if args.NumUnits < 1 {
+		return nil, errors.New("must add at least one unit")
+	}
+	out := make([]*state.CAASUnit, args.NumUnits)
+	for i := 0; i < args.NumUnits; i++ {
+		unit, err := application.AddCAASUnit()
+		if err != nil {
+			return nil, err
+		}
+		out[i] = unit
+	}
+	return out, nil
+}
