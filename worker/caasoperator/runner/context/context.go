@@ -354,6 +354,10 @@ func (ctx *HookContext) podName(name string) string {
 	return ctx.applicationName + "-" + name
 }
 
+func (ctx *HookContext) AllCAASUnits() ([]caasoperator.CAASUnit, error) {
+	return ctx.app.AllCAASUnits()
+}
+
 // SetApplicationStatus will set the given status to the service to which this
 // caasoperator's belong.
 func (ctx *HookContext) SetApplicationStatus(serviceStatus jujuc.StatusInfo) error {
