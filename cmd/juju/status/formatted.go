@@ -251,6 +251,10 @@ func (s *formattedCAASStatus) applicationScale(name string) (string, bool) {
 	for _, u := range app.Units {
 		match(u)
 	}
+
+	// XXX remove once we have this information available.
+	currentUnitCount = desiredUnitCount
+
 	if currentUnitCount == desiredUnitCount {
 		return fmt.Sprint(currentUnitCount), false
 	}
