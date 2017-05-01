@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/juju/charm.v6-unstable"
 
+	"github.com/juju/juju/api/caasoperator"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/network"
 )
@@ -75,6 +76,7 @@ type ContextCAASApplication interface {
 	ConfigSettings() (charm.Settings, error)
 	RunContainer(ContainerInfo) error
 	KillContainer(string) error
+	AllCAASUnits() ([]caasoperator.CAASUnit, error)
 }
 
 // ContextStatus is the part of a hook context related to the unit's status.
