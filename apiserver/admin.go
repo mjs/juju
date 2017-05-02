@@ -69,7 +69,15 @@ func (a *admin) login(req params.LoginRequest, loginVersion int) (params.LoginRe
 		if err != nil {
 			return fail, err
 		}
-		entity, err := st.FindEntity(tag)
+
+		// XXX If this is a MachineTag, use the controller state rather
+		// than the CAAS state, which does not know about machines.
+		var entity state.Entity
+		if _, ok := tag.(names.MachineTag); ok {
+			entity, err = a.srv.state.FindEntity(tag)
+		} else {
+			entity, err = st.FindEntity(tag)
+		}
 		if err != nil {
 			return fail, err
 		}
