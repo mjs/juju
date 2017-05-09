@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/juju/charm.v6-unstable"
 
+	"github.com/juju/juju/api/caasoperator"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/network"
 )
@@ -72,9 +73,10 @@ type relationHookContext interface {
 // ContextCAASApplication is the part of a hook context related to the application
 type ContextCAASApplication interface {
 	ApplicationName() string
-
-	// Config returns the current service configuration of the executing application
 	ConfigSettings() (charm.Settings, error)
+	RunContainer(ContainerInfo) error
+	KillContainer(string) error
+	AllCAASUnits() ([]caasoperator.CAASUnit, error)
 }
 
 // ContextStatus is the part of a hook context related to the unit's status.

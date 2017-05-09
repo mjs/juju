@@ -16,6 +16,10 @@ import (
 	"github.com/juju/utils/proxy"
 	"gopkg.in/juju/charm.v6-unstable"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/rest"
+
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/caasoperator"
 	"github.com/juju/juju/apiserver/params"
@@ -297,6 +301,61 @@ func (ctx *HookContext) SetCaasUnitStatus(caasUnitStatus jujuc.StatusInfo) error
 	// 	caasUnitStatus.Data,
 	// )
 	return nil
+}
+
+func (ctx *HookContext) RunContainer(containerInfo jujuc.ContainerInfo) error {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return err
+	}
+
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	logger.Debugf("deploying image %v", containerInfo)
+
+	containerName := ctx.podName(containerInfo.Name)
+	spec := &v1.Pod{
+		ObjectMeta: v1.ObjectMeta{
+			Name: containerName,
+			Labels: map[string]string{
+				"juju-app-name": ctx.applicationName,
+			},
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{
+				Name:            containerName,
+				Image:           containerInfo.Image,
+				ImagePullPolicy: v1.PullIfNotPresent,
+				Args:            []string{}, // MMCC TODO
+			}},
+		},
+	}
+	_, err = client.CoreV1().Pods("default").Create(spec) // XXX TODO namespace
+	return errors.Trace(err)
+}
+
+func (ctx *HookContext) KillContainer(name string) error {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return err
+	}
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	err = client.CoreV1().Pods("default").Delete(ctx.podName(name), nil)
+	return errors.Trace(err)
+}
+
+func (ctx *HookContext) podName(name string) string {
+	return ctx.applicationName + "-" + name
+}
+
+func (ctx *HookContext) AllCAASUnits() ([]caasoperator.CAASUnit, error) {
+	return ctx.app.AllCAASUnits()
 }
 
 // SetApplicationStatus will set the given status to the service to which this

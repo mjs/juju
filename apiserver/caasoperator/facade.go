@@ -476,6 +476,77 @@ func (f *Facade) CurrentModel() (params.ModelResult, error) {
 	return result, err
 }
 
+func (f *Facade) WatchUnits(args params.Entities) (params.StringsWatchResults, error) {
+	result := params.StringsWatchResults{
+		Results: make([]params.StringsWatchResult, len(args.Entities)),
+	}
+	// XXX CAAS access checks
+	for i, entity := range args.Entities {
+		tag, err := names.ParseApplicationTag(entity.Tag)
+		if err != nil {
+			result.Results[i].Error = common.ServerError(common.ErrPerm)
+			continue
+		}
+		result.Results[i], err = f.watchOneApplicationUnits(tag)
+		result.Results[i].Error = common.ServerError(err)
+	}
+	return result, nil
+}
+
+func (f *Facade) watchOneApplicationUnits(tag names.ApplicationTag) (params.StringsWatchResult, error) {
+	nothing := params.StringsWatchResult{}
+	app, err := f.st.CAASApplication(tag.Id())
+	if err != nil {
+		return nothing, err
+	}
+	watch := app.WatchUnits()
+	// Consume the initial event and forward it to the result.
+	if changes, ok := <-watch.Changes(); ok {
+		return params.StringsWatchResult{
+			StringsWatcherId: f.resources.Register(watch),
+			Changes:          changes,
+		}, nil
+	}
+	return nothing, watcher.EnsureErr(watch)
+}
+
+func (f *Facade) AllCAASUnits(args params.Entities) (params.AllCAASUnitsResults, error) {
+	result := params.AllCAASUnitsResults{
+		Results: make([]params.CAASUnits, len(args.Entities)),
+	}
+	// XXX CAAS access checks
+	for i, entity := range args.Entities {
+		tag, err := names.ParseApplicationTag(entity.Tag)
+		if err != nil {
+			result.Results[i].Error = common.ServerError(common.ErrPerm)
+			continue
+		}
+		result.Results[i], err = f.getOneAppUnits(tag)
+		result.Results[i].Error = common.ServerError(err)
+	}
+	return result, nil
+}
+
+func (f *Facade) getOneAppUnits(tag names.ApplicationTag) (params.CAASUnits, error) {
+	nothing := params.CAASUnits{}
+	app, err := f.st.CAASApplication(tag.Id())
+	if err != nil {
+		return nothing, err
+	}
+	units, err := app.AllCAASUnits()
+	if err != nil {
+		return nothing, err
+	}
+	out := params.CAASUnits{
+		Units: make([]params.CAASUnit, len(units)),
+	}
+	for i, unit := range units {
+		out.Units[i].Tag = unit.Tag().String()
+		out.Units[i].Life = params.Life(unit.Life().String())
+	}
+	return out, nil
+}
+
 /*
 
 // WatchApplicationRelations returns a StringsWatcher, for each given

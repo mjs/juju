@@ -47,6 +47,59 @@ func (s *CAASApplication) Watch() (watcher.NotifyWatcher, error) {
 	return common.Watch(s.st.facade, s.tag)
 }
 
+// WatchUnits returns a StringsWatcher that notifies of changes to
+// the lifecycles of the application's units.
+func (s *CAASApplication) WatchUnits() (watcher.StringsWatcher, error) {
+	var results params.StringsWatchResults
+	args := params.Entities{
+		Entities: []params.Entity{{Tag: s.tag.String()}},
+	}
+	err := s.st.facade.FacadeCall("WatchUnits", args, &results)
+	if err != nil {
+		return nil, err
+	}
+	if len(results.Results) != 1 {
+		return nil, fmt.Errorf("expected 1 result, got %d", len(results.Results))
+	}
+	result := results.Results[0]
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	w := apiwatcher.NewStringsWatcher(s.st.facade.RawAPICaller(), result)
+	return w, nil
+}
+
+func (s *CAASApplication) AllCAASUnits() ([]CAASUnit, error) {
+	var results params.AllCAASUnitsResults
+	args := params.Entities{
+		Entities: []params.Entity{{Tag: s.tag.String()}},
+	}
+	err := s.st.facade.FacadeCall("AllCAASUnits", args, &results)
+	if err != nil {
+		return nil, err
+	}
+	if len(results.Results) != 1 {
+		return nil, fmt.Errorf("expected 1 result, got %d", len(results.Results))
+	}
+	result := results.Results[0]
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	out := make([]CAASUnit, 0, len(result.Units))
+	for _, unit := range result.Units {
+		tag, err := names.ParseUnitTag(unit.Tag)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, CAASUnit{
+			st:   s.st,
+			tag:  tag,
+			life: unit.Life,
+		})
+	}
+	return out, nil
+}
+
 // WatchRelations returns a StringsWatcher that notifies of changes to
 // the lifecycles of relations involving s.
 func (s *CAASApplication) WatchRelations() (watcher.StringsWatcher, error) {
@@ -189,10 +242,4 @@ func (s *CAASApplication) Status(unitName string) (params.ApplicationStatusResul
 // for leadership settings changes to be made for the application.
 func (s *CAASApplication) WatchLeadershipSettings() (watcher.NotifyWatcher, error) {
 	return s.st.LeadershipSettings.WatchLeadershipSettings(s.tag.Id())
-}
-
-func (s *CAASApplication) AllCAASUnits() (units []*CAASUnit, err error) {
-	// err := s.st.facade.FacadeCall("AllCAASUnits", args, &results)
-	// Needs server-side support
-	return nil, errors.NotImplementedf("method")
 }

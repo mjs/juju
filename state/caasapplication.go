@@ -533,15 +533,11 @@ func (a *CAASApplication) AddCAASUnit() (caasunit *CAASUnit, err error) {
 // removeUnitOps returns the operations necessary to remove the supplied unit,
 // assuming the supplied asserts apply to the unit document.
 func (a *CAASApplication) removeUnitOps(u *CAASUnit, asserts bson.D) ([]txn.Op, error) {
-	observedFieldsMatch := bson.D{
-		{"charmurl", u.doc.CharmURL},
-	}
 	var ops []txn.Op
 	ops = append(ops,
 		txn.Op{
 			C:      caasUnitsC,
 			Id:     u.doc.DocID,
-			Assert: append(observedFieldsMatch, asserts...),
 			Remove: true,
 		},
 		removeMeterStatusOp(a.st, u.globalMeterStatusKey()),
@@ -552,15 +548,6 @@ func (a *CAASApplication) removeUnitOps(u *CAASUnit, asserts bson.D) ([]txn.Op, 
 		newCleanupOp(cleanupRemovedUnit, u.doc.Name),
 	)
 
-	if u.doc.CharmURL != nil {
-		decOps, err := appCharmDecRefOps(a.st, a.doc.Name, u.doc.CharmURL)
-		if errors.IsNotFound(err) {
-			return nil, errRefresh
-		} else if err != nil {
-			return nil, err
-		}
-		ops = append(ops, decOps...)
-	}
 	if a.doc.Life == Dying && a.doc.RelationCount == 0 && a.doc.UnitCount == 1 {
 		hasLastRef := bson.D{{"life", Dying}, {"relationcount", 0}, {"unitcount", 1}}
 		removeOps, err := a.removeOps(hasLastRef)
@@ -665,18 +652,12 @@ func (a *CAASApplication) ConfigSettings() (charm.Settings, error) {
 func addCAASApplicationOps(st *CAASState, args addCAASApplicationOpsArgs) ([]txn.Op, error) {
 	app := newCAASApplication(st, args.appDoc)
 
-	charmRefOps, err := appCharmIncRefOps(st, args.appDoc.Name, args.appDoc.CharmURL, true)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
 	settingsKey := app.settingsKey()
 
 	ops := []txn.Op{
 		createSettingsOp(settingsC, settingsKey, args.settings),
 		// XXX addModelCAASApplicationRefOp(st, app.Name()),
 	}
-	ops = append(ops, charmRefOps...)
 	ops = append(ops, txn.Op{
 		C:      caasApplicationsC,
 		Id:     app.Name(),

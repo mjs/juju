@@ -9,8 +9,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/juju/loggo"
 	jujutxn "github.com/juju/txn"
-	"github.com/juju/utils"
-	"github.com/juju/version"
 	"gopkg.in/juju/charm.v6-unstable"
 	"gopkg.in/juju/names.v2"
 	"gopkg.in/mgo.v2"
@@ -18,7 +16,6 @@ import (
 	"gopkg.in/mgo.v2/txn"
 
 	"github.com/juju/juju/status"
-	"github.com/juju/juju/tools"
 )
 
 var caasUnitLogger = loggo.GetLogger("juju.state.caasunit")
@@ -26,17 +23,12 @@ var caasUnitLogger = loggo.GetLogger("juju.state.caasunit")
 // caasUnitDoc represents the internal state of a unit in MongoDB.
 // Note the correspondence with UnitInfo in apiserver/params.
 type caasUnitDoc struct {
-	DocID           string `bson:"_id"`
-	Name            string `bson:"name"`
-	ModelUUID       string `bson:"model-uuid"`
-	CAASApplication string
-	// Series          string
-	CharmURL     *charm.URL
-	Resolved     ResolvedMode
-	Tools        *tools.Tools `bson:",omitempty"`
-	Life         Life
-	TxnRevno     int64 `bson:"txn-revno"`
-	PasswordHash string
+	DocID           string       `bson:"_id"`
+	Name            string       `bson:"name"`
+	ModelUUID       string       `bson:"model-uuid"`
+	CAASApplication string       `bson:"caasapplication"`
+	Resolved        ResolvedMode `bson:"resolved"`
+	Life            Life         `bson:"life"`
 }
 
 // Unit represents the state of a service unit.
@@ -63,14 +55,16 @@ func (u *CAASUnit) Application() (*CAASApplication, error) {
 // value for the associated option, and may thus be nil when no default is
 // specified.
 func (u *CAASUnit) ConfigSettings() (charm.Settings, error) {
-	if u.doc.CharmURL == nil {
-		return nil, fmt.Errorf("unit charm not set")
-	}
-	settings, err := readSettings(u.st, settingsC, applicationSettingsKey(u.doc.CAASApplication, u.doc.CharmURL))
+	app, err := u.st.CAASApplication(u.doc.CAASApplication)
 	if err != nil {
 		return nil, err
 	}
-	chrm, err := loadCharm(u.st, u.doc.CharmURL)
+	charmURL := app.doc.CharmURL
+	settings, err := readSettings(u.st, settingsC, applicationSettingsKey(u.doc.CAASApplication, charmURL))
+	if err != nil {
+		return nil, err
+	}
+	chrm, err := loadCharm(u.st, charmURL)
 	if err != nil {
 		return nil, err
 	}
@@ -171,81 +165,6 @@ func (u *CAASUnit) SetWorkloadVersion(version string) error {
 // caller to request past workload version changes.
 func (u *CAASUnit) WorkloadVersionHistory() *HistoryGetter {
 	return &HistoryGetter{st: u.st, globalKey: u.globalWorkloadVersionKey()}
-}
-
-// AgentTools returns the tools that the agent is currently running.
-// It an error that satisfies errors.IsNotFound if the tools have not
-// yet been set.
-func (u *CAASUnit) AgentTools() (*tools.Tools, error) {
-	if u.doc.Tools == nil {
-		return nil, errors.NotFoundf("agent tools for unit %q", u)
-	}
-	tools := *u.doc.Tools
-	return &tools, nil
-}
-
-// SetAgentVersion sets the version of juju that the agent is
-// currently running.
-func (u *CAASUnit) SetAgentVersion(v version.Binary) (err error) {
-	defer errors.DeferredAnnotatef(&err, "cannot set agent version for unit %q", u)
-	if err = checkVersionValidity(v); err != nil {
-		return err
-	}
-	tools := &tools.Tools{Version: v}
-	ops := []txn.Op{{
-		C:      caasUnitsC,
-		Id:     u.doc.DocID,
-		Assert: notDeadDoc,
-		Update: bson.D{{"$set", bson.D{{"tools", tools}}}},
-	}}
-	if err := u.st.runTransaction(ops); err != nil {
-		return onAbort(err, ErrDead)
-	}
-	u.doc.Tools = tools
-	return nil
-}
-
-// SetPassword sets the password for the machine's agent.
-func (u *CAASUnit) SetPassword(password string) error {
-	if len(password) < utils.MinAgentPasswordLength {
-		return fmt.Errorf("password is only %d bytes long, and is not a valid Agent password", len(password))
-	}
-	return u.setPasswordHash(utils.AgentPasswordHash(password))
-}
-
-// setPasswordHash sets the underlying password hash in the database directly
-// to the value supplied. This is split out from SetPassword to allow direct
-// manipulation in tests (to check for backwards compatibility).
-func (u *CAASUnit) setPasswordHash(passwordHash string) error {
-	ops := []txn.Op{{
-		C:      caasUnitsC,
-		Id:     u.doc.DocID,
-		Assert: notDeadDoc,
-		Update: bson.D{{"$set", bson.D{{"passwordhash", passwordHash}}}},
-	}}
-	err := u.st.runTransaction(ops)
-	if err != nil {
-		return fmt.Errorf("cannot set password of unit %q: %v", u, onAbort(err, ErrDead))
-	}
-	u.doc.PasswordHash = passwordHash
-	return nil
-}
-
-// Return the underlying PasswordHash stored in the database. Used by the test
-// suite to check that the PasswordHash gets properly updated to new values
-// when compatibility mode is detected.
-func (u *CAASUnit) getPasswordHash() string {
-	return u.doc.PasswordHash
-}
-
-// PasswordValid returns whether the given password is valid
-// for the given unit.
-func (u *CAASUnit) PasswordValid(password string) bool {
-	agentHash := utils.AgentPasswordHash(password)
-	if agentHash == u.doc.PasswordHash {
-		return true
-	}
-	return false
 }
 
 // Destroy, when called on a Alive unit, advances its lifecycle as far as
@@ -609,121 +528,6 @@ func (u *CAASUnit) SetStatus(unitStatus status.StatusInfo) error {
 	})
 }
 
-// CharmURL returns the charm URL this unit is currently using.
-func (u *CAASUnit) CharmURL() (*charm.URL, bool) {
-	if u.doc.CharmURL == nil {
-		return nil, false
-	}
-	return u.doc.CharmURL, true
-}
-
-// SetCharmURL marks the unit as currently using the supplied charm URL.
-// An error will be returned if the unit is dead, or the charm URL not known.
-func (u *CAASUnit) SetCharmURL(curl *charm.URL) error {
-	if curl == nil {
-		return fmt.Errorf("cannot set nil charm url")
-	}
-
-	db, closer := u.st.db().Copy()
-	defer closer()
-	units, closer := db.GetCollection(caasUnitsC)
-	defer closer()
-	charms, closer := db.GetCollection(charmsC)
-	defer closer()
-
-	buildTxn := func(attempt int) ([]txn.Op, error) {
-		if attempt > 0 {
-			// NOTE: We're explicitly allowing SetCharmURL to succeed
-			// when the unit is Dying, because service/charm upgrades
-			// should still be allowed to apply to dying units, so
-			// that bugs in departed/broken hooks can be addressed at
-			// runtime.
-			if notDead, err := isNotDeadWithSession(units, u.doc.DocID); err != nil {
-				return nil, errors.Trace(err)
-			} else if !notDead {
-				return nil, ErrDead
-			}
-		}
-		sel := bson.D{{"_id", u.doc.DocID}, {"charmurl", curl}}
-		if count, err := units.Find(sel).Count(); err != nil {
-			return nil, errors.Trace(err)
-		} else if count == 1 {
-			// Already set
-			return nil, jujutxn.ErrNoOperations
-		}
-		if count, err := charms.FindId(curl.String()).Count(); err != nil {
-			return nil, errors.Trace(err)
-		} else if count < 1 {
-			return nil, errors.Errorf("unknown charm url %q", curl)
-		}
-
-		// Add a reference to the service settings for the new charm.
-		incOps, err := appCharmIncRefOps(u.st, u.doc.CAASApplication, curl, false)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-
-		// Set the new charm URL.
-		differentCharm := bson.D{{"charmurl", bson.D{{"$ne", curl}}}}
-		ops := append(incOps,
-			txn.Op{
-				C:      caasUnitsC,
-				Id:     u.doc.DocID,
-				Assert: append(notDeadDoc, differentCharm...),
-				Update: bson.D{{"$set", bson.D{{"charmurl", curl}}}},
-			})
-		if u.doc.CharmURL != nil {
-			// Drop the reference to the old charm.
-			decOps, err := appCharmDecRefOps(u.st, u.doc.CAASApplication, u.doc.CharmURL)
-			if err != nil {
-				return nil, errors.Trace(err)
-			}
-			ops = append(ops, decOps...)
-		}
-		return ops, nil
-	}
-	err := u.st.db().Run(buildTxn)
-	if err == nil {
-		u.doc.CharmURL = curl
-	}
-	return err
-}
-
-// charm returns the charm for the unit, or the application if the unit's charm
-// has not been set yet.
-func (u *CAASUnit) charm() (*Charm, error) {
-	curl, ok := u.CharmURL()
-	if !ok {
-		app, err := u.Application()
-		if err != nil {
-			return nil, err
-		}
-		curl = app.doc.CharmURL
-	}
-	ch, err := loadCharm(u.st, curl)
-	return ch, errors.Annotatef(err, "getting charm for %s", u)
-}
-
-// assertCharmOps returns txn.Ops to assert the current charm of the unit.
-// If the unit currently has no charm URL set, then the application's charm
-// URL will be checked by the txn.Ops also.
-func (u *CAASUnit) assertCharmOps(ch *Charm) []txn.Op {
-	ops := []txn.Op{{
-		C:      caasUnitsC,
-		Id:     u.doc.Name,
-		Assert: bson.D{{"charmurl", u.doc.CharmURL}},
-	}}
-	if _, ok := u.CharmURL(); !ok {
-		appName := u.ApplicationName()
-		ops = append(ops, txn.Op{
-			C:      applicationsC,
-			Id:     appName,
-			Assert: bson.D{{"charmurl", ch.URL()}},
-		})
-	}
-	return ops
-}
-
 // Tag returns a name identifying the unit.
 // The returned name will be different from other Tag values returned by any
 // other entities from the same state.
@@ -834,20 +638,6 @@ func addCAASUnitOps(st *CAASState, args addCAASUnitOpsArgs) ([]txn.Op, error) {
 		createStatusOp(st, agentGlobalKey, args.agentStatusDoc),
 		createStatusOp(st, caasGlobalWorkloadVersionKey(name), args.workloadVersionDoc),
 		// XXX createMeterStatusOp(st, agentGlobalKey, args.meterStatusDoc),
-	}
-
-	// Freshly-created units will not have a charm URL set; migrated
-	// ones will, and they need to maintain their refcounts. If we
-	// relax the restrictions on migrating apps mid-upgrade, this
-	// will need to be more sophisticated, because it might need to
-	// create the settings doc.
-	if curl := args.caasUnitDoc.CharmURL; curl != nil {
-		appName := args.caasUnitDoc.CAASApplication
-		charmRefOps, err := appCharmIncRefOps(st, appName, curl, false)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		prereqOps = append(prereqOps, charmRefOps...)
 	}
 
 	return append(prereqOps, txn.Op{

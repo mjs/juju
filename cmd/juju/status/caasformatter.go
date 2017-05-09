@@ -16,6 +16,13 @@ type caasStatusFormatter struct {
 	isoTime        bool
 }
 
+type caasUnitFormatInfo struct {
+	unit            params.CAASUnitStatus
+	unitName        string
+	applicationName string
+	meterStatuses   map[string]params.MeterStatus
+}
+
 // NewStatusFormatter takes stored model information (params.FullStatus) and populates
 // the statusFormatter struct used in various status formatting methods
 func NewCAASStatusFormatter(status *params.CAASStatus, isoTime bool) *caasStatusFormatter {
@@ -90,6 +97,16 @@ func (csf *caasStatusFormatter) formatCAASApplication(name string, caasApp param
 		CanUpgradeTo: caasApp.CanUpgradeTo,
 		Units:        make(map[string]caasUnitStatus),
 		Version:      caasApp.WorkloadVersion,
+	}
+	for k, m := range caasApp.Units {
+		out.Units[k] = caasUnitStatus{}
+		_ = m
+		/*csf.formatUnit(caasUnitFormatInfo{
+			unit:            m,
+			unitName:        k,
+			applicationName: name,
+			meterStatuses:   application.MeterStatuses,
+		})*/
 	}
 	return out
 }

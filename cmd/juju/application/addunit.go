@@ -13,11 +13,13 @@ import (
 	"gopkg.in/juju/names.v2"
 
 	"github.com/juju/juju/api/application"
+	"github.com/juju/juju/api/caasapplication"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/cmd/juju/block"
 	"github.com/juju/juju/cmd/juju/common"
 	"github.com/juju/juju/cmd/modelcmd"
 	"github.com/juju/juju/instance"
+	"github.com/juju/juju/jujuclient"
 )
 
 var usageAddUnitSummary = `
@@ -154,6 +156,11 @@ type serviceAddUnitAPI interface {
 	AddUnits(application string, numUnits int, placement []*instance.Placement) ([]string, error)
 }
 
+type caasAddUnitAPI interface {
+	AddCAASUnits(string, int) ([]string, error)
+	Close() error
+}
+
 func (c *addUnitCommand) getAPI() (serviceAddUnitAPI, error) {
 	if c.api != nil {
 		return c.api, nil
@@ -165,9 +172,35 @@ func (c *addUnitCommand) getAPI() (serviceAddUnitAPI, error) {
 	return application.NewClient(root), nil
 }
 
+func (c *addUnitCommand) getCAASAPI() (caasAddUnitAPI, error) {
+	root, err := c.NewAPIRoot()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return caasapplication.NewClient(root), nil
+}
+
 // Run connects to the environment specified on the command line
 // and calls AddUnits for the given application.
 func (c *addUnitCommand) Run(ctx *cmd.Context) error {
+	store := c.ClientStore()
+	modelDetails, err := store.ModelByName(c.ControllerName(), c.ModelName())
+	if err != nil {
+		return err
+	}
+	if modelDetails.Type == jujuclient.CAASModel {
+		if len(c.Placement) > 0 {
+			return errors.New("placement not supported for CAAS models")
+		}
+		client, err := c.getCAASAPI()
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+		_, err = client.AddCAASUnits(c.ApplicationName, c.NumUnits)
+		return err
+	}
+
 	apiclient, err := c.getAPI()
 	if err != nil {
 		return err

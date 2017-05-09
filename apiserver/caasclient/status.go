@@ -132,6 +132,8 @@ func (context *statusContext) processCAASApplication(caasApp *state.CAASApplicat
 	}
 
 	units := context.units[caasApp.Name()]
+	processedStatus.Units = context.processUnits(units, caasAppCharm.URL().String())
+
 	versions := make([]status.StatusInfo, 0, len(units))
 	for _, unit := range units {
 		statuses, err := unit.WorkloadVersionHistory().StatusHistory(
@@ -155,6 +157,44 @@ func (context *statusContext) processCAASApplication(caasApp *state.CAASApplicat
 	}
 
 	return processedStatus
+}
+
+func (context *statusContext) processUnits(units map[string]*state.CAASUnit, caasAppCharm string) map[string]params.CAASUnitStatus {
+	unitsMap := make(map[string]params.CAASUnitStatus)
+	for _, unit := range units {
+		unitsMap[unit.Name()] = context.processUnit(unit, caasAppCharm)
+	}
+	return unitsMap
+}
+
+func (context *statusContext) processUnit(unit *state.CAASUnit, caasAppCharm string) params.CAASUnitStatus {
+	var result params.CAASUnitStatus
+	/*addr, err := unit.PublicAddress()
+	if err != nil {
+		// Usually this indicates that no addresses have been set on the
+		// machine yet.
+		addr = network.Address{}
+		logger.Debugf("error fetching public address: %v", err)
+	}
+	result.PublicAddress = addr.Value
+	unitPorts, _ := unit.OpenedPorts()
+	for _, port := range unitPorts {
+		result.OpenedPorts = append(result.OpenedPorts, port.String())
+	}
+	curl, _ := unit.CharmURL()
+	if caasAppCharm != "" && curl != nil && curl.String() != caasAppCharm {
+		result.Charm = curl.String()
+	}*/
+	workloadVersion, err := unit.WorkloadVersion()
+	if err == nil {
+		result.WorkloadVersion = workloadVersion
+	} else {
+		logger.Debugf("error fetching workload version: %v", err)
+	}
+
+	//processUnitAndAgentStatus(unit, &result)
+
+	return result
 }
 
 type lifer interface {
