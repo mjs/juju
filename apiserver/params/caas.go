@@ -28,3 +28,10 @@ type CAASUnit struct {
 	Tag  string `json:"tag"`
 	Life Life   `json:"life"`
 }
+
+type CAASProvisioningConfig struct {
+	Endpoint string `json:"endpoint"`
+	CAData   []byte `json:"ca-data"`
+	CertData []byte `json:"cert-data"`
+	KeyData  []byte `json:"key-data"`
+}

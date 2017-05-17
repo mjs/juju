@@ -11,18 +11,17 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/rest"
 
-	"github.com/juju/juju/state"
+	apicaasprovisioner "github.com/juju/juju/api/caasprovisioner"
 )
 
 // XXX should be using a juju specific namespace
 const namespace = "default"
 
-func newK8sClient(st *state.CAASState) (*kubernetes.Clientset, error) {
-	model, err := st.CAASModel()
+func newK8sClient(st *apicaasprovisioner.State) (*kubernetes.Clientset, error) {
+	config, err := newK8sConfig(st)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	config := newK8sConfig(model)
 	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -30,15 +29,19 @@ func newK8sClient(st *state.CAASState) (*kubernetes.Clientset, error) {
 	return client, nil
 }
 
-func newK8sConfig(model *state.CAASModel) *rest.Config {
-	return &rest.Config{
-		Host: model.Endpoint(),
-		TLSClientConfig: rest.TLSClientConfig{
-			CertData: model.CertData(),
-			KeyData:  model.KeyData(),
-			CAData:   model.CAData(),
-		},
+func newK8sConfig(st *apicaasprovisioner.State) (*rest.Config, error) {
+	config, err := st.ProvisioningConfig()
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
+	return &rest.Config{
+		Host: config.Endpoint,
+		TLSClientConfig: rest.TLSClientConfig{
+			CertData: config.CertData,
+			KeyData:  config.KeyData,
+			CAData:   config.CAData,
+		},
+	}, nil
 }
 
 type newConfigFunc func(appName string) ([]byte, error)

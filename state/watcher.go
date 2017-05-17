@@ -2728,7 +2728,6 @@ func (st *CAASState) WatchApplications() StringsWatcher {
 	return newLifecycleWatcher(st, caasApplicationsC, nil, isLocalID(st), nil)
 }
 
-
 // WatchCleanups starts and returns a CleanupWatcher.
 func (st *CAASState) WatchCleanups() NotifyWatcher {
 	return newNotifyCollWatcher(st, cleanupsC, isLocalID(st))
