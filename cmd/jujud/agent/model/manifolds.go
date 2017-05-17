@@ -22,6 +22,7 @@ import (
 	"github.com/juju/juju/worker/apicaller"
 	"github.com/juju/juju/worker/apiconfigwatcher"
 	"github.com/juju/juju/worker/applicationscaler"
+	"github.com/juju/juju/worker/caasprovisioner"
 	"github.com/juju/juju/worker/charmrevision"
 	"github.com/juju/juju/worker/charmrevision/charmrevisionmanifold"
 	"github.com/juju/juju/worker/cleaner"
@@ -300,6 +301,36 @@ func Manifolds(config ManifoldsConfig) dependency.Manifolds {
 	return result
 }
 
+// CAASManifolds returns a set of interdependent dependency manifolds that will
+// run together to administer a CAAS model, as configured.
+func CAASManifolds(config ManifoldsConfig) dependency.Manifolds {
+	result := dependency.Manifolds{
+		// The first group are foundational; the agent and clock
+		// which wrap those supplied in config, and the api-caller
+		// through which everything else communicates with the
+		// controller.
+		agentName: agent.Manifold(config.Agent),
+		clockName: clockManifold(config.Clock),
+		apiConfigWatcherName: apiconfigwatcher.Manifold(apiconfigwatcher.ManifoldConfig{
+			AgentName:          agentName,
+			AgentConfigChanged: config.AgentConfigChanged,
+		}),
+		apiCallerName: apicaller.Manifold(apicaller.ManifoldConfig{
+			AgentName:     agentName,
+			APIOpen:       api.Open,
+			NewConnection: apicaller.OnlyConnect,
+			Filter:        apiConnectFilter,
+		}),
+
+		caasProvisionerName: caasprovisioner.Manifold(caasprovisioner.ManifoldConfig{
+			AgentName:          agentName,
+			APICallerName:      apiCallerName,
+			NewProvisionerFunc: caasprovisioner.New,
+		}),
+	}
+	return result
+}
+
 // clockManifold expresses a Clock as a ValueWorker manifold.
 func clockManifold(clock clock.Clock) dependency.Manifold {
 	return dependency.Manifold{
@@ -377,6 +408,7 @@ const (
 
 	environTrackerName       = "environ-tracker"
 	undertakerName           = "undertaker"
+	caasProvisionerName      = "caas-provisioner"
 	computeProvisionerName   = "compute-provisioner"
 	storageProvisionerName   = "storage-provisioner"
 	firewallerName           = "firewaller"
