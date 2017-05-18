@@ -327,6 +327,9 @@ func CAASManifolds(config ManifoldsConfig) dependency.Manifolds {
 			APICallerName:      apiCallerName,
 			NewProvisionerFunc: caasprovisioner.New,
 		}),
+		stateCleanerName: cleaner.Manifold(cleaner.ManifoldConfig{
+			APICallerName: apiCallerName,
+		}),
 	}
 	return result
 }
