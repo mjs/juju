@@ -701,8 +701,112 @@ func (st *State) cleanupAttachmentsForDyingFilesystem(filesystemId string) (err 
 	return nil
 }
 
+// Cleanup removes all documents that were previously marked for removal, if
+// any such exist. It should be called periodically by at least one element
+// of the system.
 func (st *CAASState) Cleanup() (err error) {
-	return errors.New("unimplemented")
+	var doc cleanupDoc
+	cleanups, closer := st.db().GetCollection(cleanupsC)
+	defer closer()
+	iter := cleanups.Find(nil).Iter()
+	defer closeIter(iter, &err, "reading cleanup document")
+	for iter.Next(&doc) {
+		var err error
+		logger.Debugf("running %q cleanup: %q", doc.Kind, doc.Prefix)
+		switch doc.Kind {
+		//case cleanupRelationSettings:
+		//	err = st.cleanupRelationSettings(doc.Prefix)
+		case cleanupCharm:
+			err = st.cleanupCharm(doc.Prefix)
+		case cleanupUnitsForDyingApplication:
+			err = st.cleanupUnitsForDyingApplication(doc.Prefix)
+		//case cleanupDyingUnit:
+		//	err = st.cleanupDyingUnit(doc.Prefix)
+		case cleanupRemovedUnit:
+			err = st.cleanupRemovedUnit(doc.Prefix)
+		//case cleanupApplicationsForDyingModel:
+		//	err = st.cleanupApplicationsForDyingModel()
+		//case cleanupModelsForDyingController:
+		//	err = st.cleanupModelsForDyingController()
+		default:
+			err = errors.Errorf("unknown cleanup kind %q", doc.Kind)
+		}
+		if err != nil {
+			logger.Errorf("cleanup failed for %v(%q): %v", doc.Kind, doc.Prefix, err)
+			continue
+		}
+		ops := []txn.Op{{
+			C:      cleanupsC,
+			Id:     doc.DocID,
+			Remove: true,
+		}}
+		if err := st.runTransaction(ops); err != nil {
+			return errors.Annotate(err, "cannot remove empty cleanup document")
+		}
+	}
+	return nil
+}
+
+// cleanupCharm is speculative: it can abort without error for many
+// reasons, because it's triggered somewhat overenthusiastically for
+// simplicity's sake.
+func (st *CAASState) cleanupCharm(charmURL string) error {
+	curl, err := charm.ParseURL(charmURL)
+	if err != nil {
+		return errors.Annotatef(err, "invalid charm URL %v", charmURL)
+	}
+
+	ch, err := st.Charm(curl)
+	if errors.IsNotFound(err) {
+		// Charm already removed.
+		return nil
+	} else if err != nil {
+		return errors.Annotate(err, "reading charm")
+	}
+
+	err = ch.Destroy()
+	switch errors.Cause(err) {
+	case nil:
+	case errCharmInUse:
+		// No cleanup necessary at this time.
+		return nil
+	default:
+		return errors.Annotate(err, "destroying charm")
+	}
+
+	if err := ch.Remove(); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+// cleanupDyingUnit marks resources owned by the unit as dying, to ensure
+// cleanupUnitsForDyingApplication sets all units with the given prefix to Dying,
+// if they are not already Dying or Dead. It's expected to be used when a
+// application is destroyed.
+func (st *CAASState) cleanupUnitsForDyingApplication(applicationname string) (err error) {
+	// This won't miss units, because a Dying application cannot have units
+	// added to it. But we do have to remove the units themselves via
+	// individual transactions, because they could be in any state at all.
+	units, closer := st.db().GetCollection(caasUnitsC)
+	defer closer()
+
+	unit := CAASUnit{st: st}
+	sel := bson.D{{"caasapplication", applicationname}, {"life", Alive}}
+	iter := units.Find(sel).Iter()
+	defer closeIter(iter, &err, "reading unit document")
+	for iter.Next(&unit.doc) {
+		if err := unit.Destroy(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// cleanupRemovedUnit takes care of all the final cleanup required when
+// a unit is removed.
+func (st *CAASState) cleanupRemovedUnit(unitId string) error {
+	return nil
 }
 
 func closeIter(iter *mgo.Iter, errOut *error, message string) {

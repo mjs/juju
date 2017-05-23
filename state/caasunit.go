@@ -231,42 +231,16 @@ func (u *CAASUnit) destroyOps() ([]txn.Op, error) {
 	if u.doc.Life != Alive {
 		return nil, errAlreadyDying
 	}
-	minUnitsOp := minUnitsTriggerOp(u.st, u.ApplicationName())
-	cleanupOp := newCleanupOp(cleanupDyingUnit, u.doc.Name)
-	setDyingOp := txn.Op{
-		C:      caasUnitsC,
-		Id:     u.doc.DocID,
-		Assert: isAliveDoc,
-		Update: bson.D{{"$set", bson.D{{"life", Dying}}}},
-	}
-	setDyingOps := []txn.Op{setDyingOp, cleanupOp, minUnitsOp}
 
-	// See if the unit agent has started running.
-	// If so then we can't set directly to dead.
-	//isAssigned := u.doc.MachineId != ""
-	agentStatusDocId := u.globalAgentKey()
-	agentStatusInfo, agentErr := getStatus(u.st, agentStatusDocId, "agent")
-	if errors.IsNotFound(agentErr) {
+	// XXX Check agent status info when implemented...
+
+	removeOps, err := u.removeOps(isAliveDoc)
+	if err == errAlreadyRemoved {
 		return nil, errAlreadyDying
-	} else if agentErr != nil {
-		return nil, errors.Trace(agentErr)
+	} else if err != nil {
+		return nil, err
 	}
-	// if isAssigned && ...
-	if agentStatusInfo.Status != status.Allocating {
-		return setDyingOps, nil
-	}
-	if agentStatusInfo.Status != status.Error && agentStatusInfo.Status != status.Allocating {
-		return nil, errors.Errorf("unexpected unit state - unit with status %v is not assigned to a machine", agentStatusInfo.Status)
-	}
-
-	statusOp := txn.Op{
-		C:      statusesC,
-		Id:     u.st.docID(agentStatusDocId),
-		Assert: bson.D{{"status", agentStatusInfo.Status}},
-	}
-
-	ops := []txn.Op{statusOp, minUnitsOp}
-	return ops, nil
+	return removeOps, nil
 }
 
 // removeOps returns the operations necessary to remove the unit, assuming
