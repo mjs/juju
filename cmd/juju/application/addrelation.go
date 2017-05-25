@@ -15,12 +15,14 @@ import (
 
 	"github.com/juju/juju/api/application"
 	"github.com/juju/juju/api/applicationoffers"
+	"github.com/juju/juju/api/caasapplication"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/cmd/juju/block"
 	"github.com/juju/juju/cmd/juju/common"
 	"github.com/juju/juju/cmd/modelcmd"
 	"github.com/juju/juju/core/crossmodel"
 	"github.com/juju/juju/feature"
+	"github.com/juju/juju/jujuclient"
 )
 
 const addRelationDocCrossModel = `
@@ -56,10 +58,12 @@ func NewAddRelationCommand() cmd.Command {
 // addRelationCommand adds a relation between two application endpoints.
 type addRelationCommand struct {
 	modelcmd.ModelCommandBase
-	Endpoints         []string
-	remoteEndpoint    *crossmodel.ApplicationURL
-	addRelationAPI    applicationAddRelationAPI
-	consumeDetailsAPI applicationConsumeDetailsAPI
+	Endpoints             []string
+	remoteEndpoint        *crossmodel.ApplicationURL
+	addRelationAPI        applicationAddRelationAPI
+	consumeDetailsAPI     applicationConsumeDetailsAPI
+	caasAddRelationAPI    applicationAddRelationAPI
+	caasConsumeDetailsAPI applicationConsumeDetailsAPI
 }
 
 func (c *addRelationCommand) Info() *cmd.Info {
@@ -106,6 +110,18 @@ func (c *addRelationCommand) getAddRelationAPI() (applicationAddRelationAPI, err
 	return application.NewClient(root), nil
 }
 
+func (c *addRelationCommand) getCAASAddRelationAPI() (applicationAddRelationAPI, error) {
+	if c.caasAddRelationAPI != nil {
+		return c.caasAddRelationAPI, nil
+	}
+
+	root, err := c.NewAPIRoot()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return caasapplication.NewClient(root), nil
+}
+
 func (c *addRelationCommand) getOffersAPI() (applicationConsumeDetailsAPI, error) {
 	if c.consumeDetailsAPI != nil {
 		return c.consumeDetailsAPI, nil
@@ -122,13 +138,57 @@ func (c *addRelationCommand) getOffersAPI() (applicationConsumeDetailsAPI, error
 	return applicationoffers.NewClient(root), nil
 }
 
+func (c *addRelationCommand) getCAASOffersAPI() (applicationConsumeDetailsAPI, error) {
+	if c.caasConsumeDetailsAPI != nil {
+		return c.caasConsumeDetailsAPI, nil
+	}
+
+	controllerName, err := c.ControllerName()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	root, err := c.CommandBase.NewAPIRoot(c.ClientStore(), controllerName, "")
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return applicationoffers.NewClient(root), nil
+}
+
 func (c *addRelationCommand) Run(ctx *cmd.Context) error {
+	store := c.ClientStore()
+	modelDetails, err := store.ModelByName(c.ControllerName(), c.ModelName())
+	if errors.IsNotFound(err) {
+		if err := c.RefreshModels(store, c.ControllerName()); err != nil {
+			return errors.Annotate(err, "refreshing models cache")
+		}
+		// Now try again.
+		modelDetails, err = store.ModelByName(c.ControllerName(), c.ModelName())
+	}
+	if err != nil {
+		return errors.Annotate(err, "getting model details")
+	}
+
+	if modelDetails.Type == jujuclient.CAASModel {
+		client, err := c.getCAASAddRelationAPI()
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+
+		_, err = client.AddCAASRelation(c.Endpoints...)
+		if params.IsCodeUnauthorized(err) {
+			common.PermissionsMessage(ctx.Stderr, "add a relation")
+		}
+		return block.ProcessBlockedError(err, block.BlockChange)
+	}
+
 	client, err := c.getAddRelationAPI()
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 
+	// XXX CAAS
 	if c.remoteEndpoint != nil {
 		if client.BestAPIVersion() < 3 {
 			// old client does not have cross-model capability.
