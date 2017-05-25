@@ -25,7 +25,7 @@ import (
 // RemoteApplication represents the state of an application hosted
 // in an external (remote) model.
 type RemoteApplication struct {
-	st  *State
+	st  modelBackend
 	doc remoteApplicationDoc
 }
 
@@ -155,7 +155,12 @@ func (s *RemoteApplication) URL() (string, bool) {
 // Token returns the token for the remote application, provided by the remote
 // model to identify the service in future communications.
 func (s *RemoteApplication) Token() (string, error) {
-	r := s.st.RemoteEntities()
+	st, ok := s.st.(*State)
+	if !ok {
+		// XXX CAAS
+		return "", errors.New("unsupported")
+	}
+	r := st.RemoteEntities()
 	return r.GetToken(s.SourceModel(), s.Tag())
 }
 
@@ -276,7 +281,7 @@ func (s *RemoteApplication) Destroy() (err error) {
 		}
 		return nil, jujutxn.ErrTransientFailure
 	}
-	return s.st.run(buildTxn)
+	return s.st.db().Run(buildTxn)
 }
 
 // destroyOps returns the operations required to destroy the application. If it
@@ -348,7 +353,12 @@ func (s *RemoteApplication) destroyOps() ([]txn.Op, error) {
 // removeOps returns the operations required to remove the application. Supplied
 // asserts will be included in the operation on the application document.
 func (s *RemoteApplication) removeOps(asserts bson.D) []txn.Op {
-	r := s.st.RemoteEntities()
+	st, ok := s.st.(*State)
+	if !ok {
+		// XXX CAAS
+		return nil
+	}
+	r := st.RemoteEntities()
 	ops := []txn.Op{
 		{
 			C:      remoteApplicationsC,
@@ -422,6 +432,12 @@ func (s *RemoteApplication) Endpoint(relationName string) (Endpoint, error) {
 // If an endpoint with the same name already exists, an error is returned.
 // If the endpoints change during the update, the operation is retried.
 func (s *RemoteApplication) AddEndpoints(eps []charm.Relation) error {
+	st, ok := s.st.(*State)
+	if !ok {
+		// XXX CAAS
+		return errors.New("unsupported")
+	}
+
 	newEps := make([]remoteEndpointDoc, len(eps))
 	for i, ep := range eps {
 		newEps[i] = remoteEndpointDoc{
@@ -433,7 +449,7 @@ func (s *RemoteApplication) AddEndpoints(eps []charm.Relation) error {
 		}
 	}
 
-	model, err := s.st.Model()
+	model, err := st.Model()
 	if err != nil {
 		return errors.Trace(err)
 	} else if model.Life() != Alive {
@@ -467,7 +483,7 @@ func (s *RemoteApplication) AddEndpoints(eps []charm.Relation) error {
 		// If we've tried once already and failed, check that
 		// model may have been destroyed.
 		if attempt > 0 {
-			if err := checkModelActive(s.st); err != nil {
+			if err := checkModelActive(st); err != nil {
 				return nil, errors.Trace(err)
 			}
 			if err = s.Refresh(); err != nil {
@@ -501,7 +517,7 @@ func (s *RemoteApplication) AddEndpoints(eps []charm.Relation) error {
 		}
 		return ops, nil
 	}
-	if err := s.st.run(buildTxn); err != nil {
+	if err := s.st.db().Run(buildTxn); err != nil {
 		return errors.Trace(err)
 	}
 	return s.Refresh()
@@ -531,7 +547,14 @@ func (s *RemoteApplication) Refresh() error {
 
 // Relations returns a Relation for every relation the application is in.
 func (s *RemoteApplication) Relations() (relations []*Relation, err error) {
-	return applicationRelations(s.st, s.doc.Name)
+	switch st := s.st.(type) {
+	case *CAASState:
+		return caasApplicationRelations(st, s.doc.Name)
+	case *State:
+		return applicationRelations(st, s.doc.Name)
+	default:
+		return nil, fmt.Errorf("unknown state type %T", s.st)
+	}
 }
 
 // AddRemoteApplicationParams contains the parameters for adding a remote service

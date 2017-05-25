@@ -178,3 +178,87 @@ func addApplicationUnits(backend *state.CAASState, args params.AddApplicationUni
 	}
 	return out, nil
 }
+
+// AddRelation adds a relation between the specified endpoints and returns the relation info.
+func (facade *Facade) AddRelation(args params.AddRelation) (params.AddRelationResults, error) {
+	/*if err := api.check.ChangeAllowed(); err != nil {
+		return params.AddRelationResults{}, errors.Trace(err)
+	}*/
+
+	endpoints := make([]string, len(args.Endpoints))
+	// We may have a remote application passed in as the endpoint spec.
+	// We'll iterate the endpoints to check.
+	//isRemote := false
+	for i, ep := range args.Endpoints {
+		endpoints[i] = ep
+	}
+	/*
+			// If cross model relations not enabled, ignore remote endpoints.
+			if !featureflag.Enabled(feature.CrossModelRelations) {
+				continue
+			}
+
+			// If the endpoint is not remote, skip it.
+			// We first need to strip off any relation name
+			// which may have been appended to the URL, then
+			// we try parsing the URL.
+			possibleURL := applicationUrlEndpointParse.ReplaceAllString(ep, "$url")
+			relName := applicationUrlEndpointParse.ReplaceAllString(ep, "$relname")
+
+			// If the URL parses, we need to look up the remote application
+			// details and save to state.
+			url, err := jujucrossmodel.ParseApplicationURL(possibleURL)
+			if err != nil {
+				// Not a URL.
+				continue
+			}
+			// Save the remote application details into state.
+			// TODO(wallyworld) - allow app name to be aliased
+			alias := url.ApplicationName
+			remoteApp, err := api.processRemoteApplication(url, alias)
+			if err != nil {
+				return params.AddRelationResults{}, errors.Trace(err)
+			}
+			// The endpoint is named after the remote application name,
+			// not the application name from the URL.
+			endpoints[i] = remoteApp.Name()
+			if relName != "" {
+				endpoints[i] = remoteApp.Name() + ":" + relName
+			}
+			isRemote = true
+		}
+		// If it's not a remote relation to another model then
+		// the user needs write access to the model.
+		if !isRemote {
+			if err := api.checkCanWrite(); err != nil {
+				return params.AddRelationResults{}, errors.Trace(err)
+			}
+		}
+	*/
+
+	inEps, err := facade.backend.InferEndpoints(endpoints...)
+	if err != nil {
+		return params.AddRelationResults{}, errors.Trace(err)
+	}
+	rel, err := facade.backend.AddRelation(inEps...)
+	if err != nil {
+		return params.AddRelationResults{}, errors.Trace(err)
+	}
+
+	outEps := make(map[string]params.CharmRelation)
+	for _, inEp := range inEps {
+		outEp, err := rel.Endpoint(inEp.ApplicationName)
+		if err != nil {
+			return params.AddRelationResults{}, errors.Trace(err)
+		}
+		outEps[inEp.ApplicationName] = params.CharmRelation{
+			Name:      outEp.Relation.Name,
+			Role:      string(outEp.Relation.Role),
+			Interface: outEp.Relation.Interface,
+			Optional:  outEp.Relation.Optional,
+			Limit:     outEp.Relation.Limit,
+			Scope:     string(outEp.Relation.Scope),
+		}
+	}
+	return params.AddRelationResults{Endpoints: outEps}, nil
+}
