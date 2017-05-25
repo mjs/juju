@@ -22,7 +22,7 @@ import (
 // RelationUnit holds information about a single unit in a relation, and
 // allows clients to conveniently access unit-specific functionality.
 type RelationUnit struct {
-	st            *State
+	st            modelBackend
 	relation      *Relation
 	unitName      string
 	isPrincipal   bool
@@ -68,7 +68,7 @@ var ErrCannotEnterScopeYet = stderrors.New("cannot enter scope yet: non-alive su
 // intervention; the relation will not be able to become Dead until all units
 // have departed its scopes.
 func (ru *RelationUnit) EnterScope(settings map[string]interface{}) error {
-	db, closer := ru.st.newDB()
+	db, closer := ru.st.db().Copy()
 	defer closer()
 	relationScopes, closer := db.GetCollection(relationScopesC)
 	defer closer()
@@ -90,6 +90,7 @@ func (ru *RelationUnit) EnterScope(settings map[string]interface{}) error {
 	relationDocID := ru.relation.doc.DocID
 	var ops []txn.Op
 	if ru.checkUnitLife {
+		// XXX CAAS
 		ops = append(ops, txn.Op{
 			C:      unitsC,
 			Id:     ru.unitName,
@@ -143,7 +144,7 @@ func (ru *RelationUnit) EnterScope(settings map[string]interface{}) error {
 	}
 
 	// Now run the complete transaction, or figure out why we can't.
-	if err := ru.st.runTransaction(ops); err != txn.ErrAborted {
+	if err := ru.st.db().RunTransaction(ops); err != txn.ErrAborted {
 		return err
 	}
 	if count, err := relationScopes.FindId(ruKey).Count(); err != nil {
@@ -206,6 +207,12 @@ func (ru *RelationUnit) EnterScope(settings map[string]interface{}) error {
 // exists and is Alive, its name will be returned as well; if one exists
 // but is not Alive, ErrCannotEnterScopeYet is returned.
 func (ru *RelationUnit) subordinateOps() ([]txn.Op, string, error) {
+	st, ok := ru.st.(*State)
+	if !ok {
+		// CAAS does not have subordinates.
+		return nil, "", nil
+	}
+
 	units, closer := ru.st.db().GetCollection(unitsC)
 	defer closer()
 
@@ -223,7 +230,7 @@ func (ru *RelationUnit) subordinateOps() ([]txn.Op, string, error) {
 	selSubordinate := bson.D{{"application", applicationname}, {"principal", unitName}}
 	var lDoc lifeDoc
 	if err := units.Find(selSubordinate).One(&lDoc); err == mgo.ErrNotFound {
-		application, err := ru.st.Application(applicationname)
+		application, err := st.Application(applicationname)
 		if err != nil {
 			return nil, "", err
 		}
@@ -259,7 +266,7 @@ func (ru *RelationUnit) PrepareLeaveScope() error {
 		Id:     key,
 		Update: bson.D{{"$set", bson.D{{"departing", true}}}},
 	}}
-	return ru.st.runTransaction(ops)
+	return ru.st.db().RunTransaction(ops)
 }
 
 // LeaveScope signals that the unit has left its scope in the relation.
@@ -338,7 +345,7 @@ func (ru *RelationUnit) LeaveScope() error {
 		}
 		return ops, nil
 	}
-	if err := ru.st.run(buildTxn); err != nil {
+	if err := ru.st.db().Run(buildTxn); err != nil {
 		return errors.Annotatef(err, "cannot leave scope for %s", desc)
 	}
 	return nil
@@ -376,9 +383,7 @@ func (ru *RelationUnit) WatchScope() *RelationScopeWatcher {
 	return watchRelationScope(ru.st, ru.scope, role, ru.unitName)
 }
 
-func watchRelationScope(
-	st *State, scope string, role charm.RelationRole, ignore string,
-) *RelationScopeWatcher {
+func watchRelationScope(st modelBackend, scope string, role charm.RelationRole, ignore string) *RelationScopeWatcher {
 	scope = scope + "#" + string(role)
 	return newRelationScopeWatcher(st, scope, ignore)
 }
@@ -419,7 +424,13 @@ func (ru *RelationUnit) ReadSettings(uname string) (m map[string]interface{}, er
 // public address. If this is cross-model and there's no public
 // address for the unit, return an error.
 func (ru *RelationUnit) SettingsAddress() (network.Address, error) {
-	unit, err := ru.st.Unit(ru.unitName)
+	st, ok := ru.st.(*State)
+	if !ok {
+		// XXX CAAS
+		return network.Address{}, errors.New("unsupported")
+	}
+
+	unit, err := st.Unit(ru.unitName)
 	if err != nil {
 		return network.Address{}, errors.Trace(err)
 	}

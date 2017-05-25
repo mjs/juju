@@ -4,6 +4,7 @@
 package state
 
 import (
+	"sort"
 	"strconv"
 
 	"github.com/juju/errors"
@@ -710,4 +711,53 @@ func addCAASApplicationOps(st *CAASState, args addCAASApplicationOpsArgs) ([]txn
 type addCAASApplicationOpsArgs struct {
 	appDoc   *caasApplicationDoc
 	settings map[string]interface{}
+}
+
+// Endpoints returns the application's currently available relation endpoints.
+func (a *CAASApplication) Endpoints() (eps []Endpoint, err error) {
+	ch, _, err := a.Charm()
+	if err != nil {
+		return nil, err
+	}
+	collect := func(role charm.RelationRole, rels map[string]charm.Relation) {
+		for _, rel := range rels {
+			eps = append(eps, Endpoint{
+				ApplicationName: a.doc.Name,
+				Relation:        rel,
+			})
+		}
+	}
+	meta := ch.Meta()
+	collect(charm.RolePeer, meta.Peers)
+	collect(charm.RoleProvider, meta.Provides)
+	collect(charm.RoleRequirer, meta.Requires)
+	collect(charm.RoleProvider, map[string]charm.Relation{
+		"juju-info": {
+			Name:      "juju-info",
+			Role:      charm.RoleProvider,
+			Interface: "juju-info",
+			Scope:     charm.ScopeGlobal,
+		},
+	})
+	sort.Sort(epSlice(eps))
+	return eps, nil
+}
+
+// Endpoint returns the relation endpoint with the supplied name, if it exists.
+func (a *CAASApplication) Endpoint(relationName string) (Endpoint, error) {
+	eps, err := a.Endpoints()
+	if err != nil {
+		return Endpoint{}, err
+	}
+	for _, ep := range eps {
+		if ep.Name == relationName {
+			return ep, nil
+		}
+	}
+	return Endpoint{}, errors.Errorf("application %q has no %q relation", a, relationName)
+}
+
+// IsRemote returns false for a local application.
+func (a *CAASApplication) IsRemote() bool {
+	return false
 }

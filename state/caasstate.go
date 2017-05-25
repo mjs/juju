@@ -4,6 +4,10 @@
 package state
 
 import (
+	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/juju/errors"
 	"github.com/juju/utils"
 	"github.com/juju/utils/clock"
@@ -413,4 +417,237 @@ func (st *CAASState) AllCAASApplications() ([]*CAASApplication, error) {
 		caasApps = append(caasApps, newCAASApplication(st, &v))
 	}
 	return caasApps, nil
+}
+
+// InferEndpoints returns the endpoints corresponding to the supplied names.
+// There must be 1 or 2 supplied names, of the form <application>[:<relation>].
+// If the supplied names uniquely specify a possible relation, or if they
+// uniquely specify a possible relation once all implicit relations have been
+// filtered, the endpoints corresponding to that relation will be returned.
+func (st *CAASState) InferEndpoints(names ...string) ([]Endpoint, error) {
+	// Collect all possible sane endpoint lists.
+	var candidates [][]Endpoint
+	switch len(names) {
+	case 1:
+		eps, err := st.endpoints(names[0], isPeer)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		for _, ep := range eps {
+			candidates = append(candidates, []Endpoint{ep})
+		}
+	case 2:
+		eps1, err := st.endpoints(names[0], notPeer)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		eps2, err := st.endpoints(names[1], notPeer)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		for _, ep1 := range eps1 {
+			for _, ep2 := range eps2 {
+				if ep1.CanRelateTo(ep2) {
+					candidates = append(candidates, []Endpoint{ep1, ep2})
+				}
+			}
+		}
+	default:
+		return nil, errors.Errorf("cannot relate %d endpoints", len(names))
+	}
+	// If there's ambiguity, try discarding implicit relations.
+	switch len(candidates) {
+	case 0:
+		return nil, errors.Errorf("no relations found")
+	case 1:
+		return candidates[0], nil
+	}
+	var filtered [][]Endpoint
+outer:
+	for _, cand := range candidates {
+		for _, ep := range cand {
+			if ep.IsImplicit() {
+				continue outer
+			}
+		}
+		filtered = append(filtered, cand)
+	}
+	if len(filtered) == 1 {
+		return filtered[0], nil
+	}
+	keys := []string{}
+	for _, cand := range candidates {
+		keys = append(keys, fmt.Sprintf("%q", relationKey(cand)))
+	}
+	sort.Strings(keys)
+	return nil, errors.Errorf("ambiguous relation: %q could refer to %s",
+		strings.Join(names, " "), strings.Join(keys, "; "))
+}
+
+func caasApplicationByName(st *CAASState, name string) (ApplicationEntity, error) {
+	/*s, err := st.RemoteApplication(name)
+	if err == nil {
+		return s, nil
+	} else if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}*/
+	return st.CAASApplication(name)
+}
+
+// endpoints returns all endpoints that could be intended by the
+// supplied endpoint name, and which cause the filter param to
+// return true.
+func (st *CAASState) endpoints(name string, filter func(ep Endpoint) bool) ([]Endpoint, error) {
+	var appName, relName string
+	if i := strings.Index(name, ":"); i == -1 {
+		appName = name
+	} else if i != 0 && i != len(name)-1 {
+		appName = name[:i]
+		relName = name[i+1:]
+	} else {
+		return nil, errors.Errorf("invalid endpoint %q", name)
+	}
+	svc, err := caasApplicationByName(st, appName)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	eps := []Endpoint{}
+	if relName != "" {
+		ep, err := svc.Endpoint(relName)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		eps = append(eps, ep)
+	} else {
+		eps, err = svc.Endpoints()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+	final := []Endpoint{}
+	for _, ep := range eps {
+		if filter(ep) {
+			final = append(final, ep)
+		}
+	}
+	return final, nil
+}
+
+// AddRelation creates a new relation with the given endpoints.
+func (st *CAASState) AddRelation(eps ...Endpoint) (r *Relation, err error) {
+	key := relationKey(eps)
+	defer errors.DeferredAnnotatef(&err, "cannot add relation %q", key)
+	// Enforce basic endpoint sanity. The epCount restrictions may be relaxed
+	// in the future; if so, this method is likely to need significant rework.
+	if len(eps) != 2 {
+		return nil, errors.Errorf("relation must have two endpoints")
+	}
+	if !eps[0].CanRelateTo(eps[1]) {
+		return nil, errors.Errorf("endpoints do not relate")
+	}
+
+	// Check applications are alive and do checks if one is remote.
+	svc1, err := aliveCAASApplication(st, eps[0].ApplicationName)
+	if err != nil {
+		return nil, err
+	}
+	svc2, err := aliveCAASApplication(st, eps[1].ApplicationName)
+	if err != nil {
+		return nil, err
+	}
+	if svc1.IsRemote() && svc2.IsRemote() {
+		return nil, errors.Errorf("cannot add relation between remote applications %q and %q", eps[0].ApplicationName, eps[1].ApplicationName)
+	}
+	remoteRelation := svc1.IsRemote() || svc2.IsRemote()
+	if remoteRelation && (eps[0].Scope != charm.ScopeGlobal || eps[1].Scope != charm.ScopeGlobal) {
+		return nil, errors.Errorf("both endpoints must be globally scoped for remote relations")
+	}
+
+	// We only get a unique relation id once, to save on roundtrips. If it's
+	// -1, we haven't got it yet (we don't get it at this stage, because we
+	// still don't know whether it's sane to even attempt creation).
+	id := -1
+	// If a application's charm is upgraded while we're trying to add a relation,
+	// we'll need to re-validate application sanity.
+	var doc *relationDoc
+	buildTxn := func(attempt int) ([]txn.Op, error) {
+		// Perform initial relation sanity check.
+		if exists, err := isNotDead(st, relationsC, key); err != nil {
+			return nil, errors.Trace(err)
+		} else if exists {
+			return nil, errors.AlreadyExistsf("relation %v", key)
+		}
+		// Collect per-application operations, checking sanity as we go.
+		var ops []txn.Op
+		for _, ep := range eps {
+			svc, err := aliveCAASApplication(st, ep.ApplicationName)
+			if err != nil {
+				return nil, err
+			}
+			/*if svc.IsRemote() {
+				ops = append(ops, txn.Op{
+					C:      remoteApplicationsC,
+					Id:     st.docID(ep.ApplicationName),
+					Assert: bson.D{{"life", Alive}},
+					Update: bson.D{{"$inc", bson.D{{"relationcount", 1}}}},
+				})
+			} else {*/
+			localSvc := svc.(*CAASApplication)
+			ch, _, err := localSvc.Charm()
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			if !ep.ImplementedBy(ch) {
+				return nil, errors.Errorf("%q does not implement %q", ep.ApplicationName, ep)
+			}
+			ops = append(ops, txn.Op{
+				C:      caasApplicationsC,
+				Id:     st.docID(ep.ApplicationName),
+				Assert: bson.D{{"life", Alive}, {"charmurl", ch.URL()}},
+				Update: bson.D{{"$inc", bson.D{{"relationcount", 1}}}},
+			})
+			/*}*/
+		}
+
+		// Create a new unique id if that has not already been done, and add
+		// an operation to create the relation document.
+		if id == -1 {
+			var err error
+			if id, err = sequence(st, "relation"); err != nil {
+				return nil, errors.Trace(err)
+			}
+		}
+		docID := st.docID(key)
+		doc = &relationDoc{
+			DocID:     docID,
+			Key:       key,
+			ModelUUID: st.ModelUUID(),
+			Id:        id,
+			Endpoints: eps,
+			Life:      Alive,
+		}
+		ops = append(ops, txn.Op{
+			C:      relationsC,
+			Id:     docID,
+			Assert: txn.DocMissing,
+			Insert: doc,
+		})
+		return ops, nil
+	}
+	if err = st.db().Run(buildTxn); err == nil {
+		return &Relation{st, *doc}, nil
+	}
+	return nil, errors.Trace(err)
+}
+
+func aliveCAASApplication(st *CAASState, name string) (ApplicationEntity, error) {
+	app, err := caasApplicationByName(st, name)
+	if errors.IsNotFound(err) {
+		return nil, errors.Errorf("application %q does not exist", name)
+	} else if err != nil {
+		return nil, errors.Trace(err)
+	} else if app.Life() != Alive {
+		return nil, errors.Errorf("application %q is not alive", name)
+	}
+	return app, err
 }

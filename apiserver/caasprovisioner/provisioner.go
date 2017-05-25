@@ -5,12 +5,12 @@ package caasprovisioner
 
 import (
 	"github.com/juju/errors"
+	"github.com/juju/loggo"
 	"github.com/juju/juju/apiserver/common"
 	"github.com/juju/juju/apiserver/facade"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/state"
 	"github.com/juju/juju/state/watcher"
-	"github.com/juju/loggo"
 )
 
 var logger = loggo.GetLogger("juju.apiserver.caasprovisioner")

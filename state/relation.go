@@ -46,11 +46,11 @@ type relationDoc struct {
 
 // Relation represents a relation between one or two service endpoints.
 type Relation struct {
-	st  *State
+	st  modelBackend
 	doc relationDoc
 }
 
-func newRelation(st *State, doc *relationDoc) *Relation {
+func newRelation(st modelBackend, doc *relationDoc) *Relation {
 	return &Relation{
 		st:  st,
 		doc: *doc,
@@ -130,7 +130,7 @@ func (r *Relation) Destroy() (err error) {
 		}
 		return ops, nil
 	}
-	return rel.st.run(buildTxn)
+	return rel.st.db().Run(buildTxn)
 }
 
 // destroyOps returns the operations necessary to destroy the relation, and
@@ -178,22 +178,45 @@ func (r *Relation) removeOps(ignoreService string, departingUnitName string) ([]
 		if ep.ApplicationName == ignoreService {
 			continue
 		}
-		app, err := applicationByName(r.st, ep.ApplicationName)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if app.IsRemote() {
-			epOps, err := r.removeRemoteEndpointOps(ep, departingUnitName != "")
+		switch st := r.st.(type) {
+		case *State:
+			app, err := applicationByName(st, ep.ApplicationName)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
-			ops = append(ops, epOps...)
-		} else {
-			epOps, err := r.removeLocalEndpointOps(ep, departingUnitName)
+			if app.IsRemote() {
+				epOps, err := r.removeRemoteEndpointOps(ep, departingUnitName != "")
+				if err != nil {
+					return nil, errors.Trace(err)
+				}
+				ops = append(ops, epOps...)
+			} else {
+				epOps, err := r.removeLocalEndpointOps(ep, departingUnitName)
+				if err != nil {
+					return nil, errors.Trace(err)
+				}
+				ops = append(ops, epOps...)
+			}
+		case *CAASState:
+			app, err := caasApplicationByName(st, ep.ApplicationName)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
-			ops = append(ops, epOps...)
+			if app.IsRemote() {
+				epOps, err := r.removeRemoteEndpointOps(ep, departingUnitName != "")
+				if err != nil {
+					return nil, errors.Trace(err)
+				}
+				ops = append(ops, epOps...)
+			} else {
+				epOps, err := r.removeLocalEndpointOps(ep, departingUnitName)
+				if err != nil {
+					return nil, errors.Trace(err)
+				}
+				ops = append(ops, epOps...)
+			}
+		default:
+			return nil, fmt.Errorf("unknown state type %T", r.st)
 		}
 	}
 	cleanupOp := newCleanupOp(cleanupRelationSettings, fmt.Sprintf("r#%d#", r.Id()))
@@ -219,31 +242,67 @@ func (r *Relation) removeLocalEndpointOps(ep Endpoint, departingUnitName string)
 		asserts = append(hasRelation, cannotDieYet...)
 	} else {
 		// This service may require immediate removal.
-		applications, closer := r.st.db().GetCollection(applicationsC)
-		defer closer()
+		switch st := r.st.(type) {
+		case *CAASState:
+			caasApps, closer := r.st.db().GetCollection(caasApplicationsC)
+			defer closer()
 
-		svc := &Application{st: r.st}
-		hasLastRef := bson.D{{"life", Dying}, {"unitcount", 0}, {"relationcount", 1}}
-		removable := append(bson.D{{"_id", ep.ApplicationName}}, hasLastRef...)
-		if err := applications.Find(removable).One(&svc.doc); err == nil {
-			return svc.removeOps(hasLastRef)
-		} else if err != mgo.ErrNotFound {
-			return nil, err
+			app := &CAASApplication{st: st}
+			hasLastRef := bson.D{{"life", Dying}, {"unitcount", 0}, {"relationcount", 1}}
+			removable := append(bson.D{{"_id", ep.ApplicationName}}, hasLastRef...)
+			if err := caasApps.Find(removable).One(&app.doc); err == nil {
+				return app.removeOps(hasLastRef)
+			} else if err != mgo.ErrNotFound {
+				return nil, err
+			}
+			// If not, we must check that this is still the case when the
+			// transaction is applied.
+			asserts = bson.D{{"$or", []bson.D{
+				{{"life", Alive}},
+				{{"unitcount", bson.D{{"$gt", 0}}}},
+				{{"relationcount", bson.D{{"$gt", 1}}}},
+			}}}
+		case *State:
+			applications, closer := r.st.db().GetCollection(applicationsC)
+			defer closer()
+
+			svc := &Application{st: st}
+			hasLastRef := bson.D{{"life", Dying}, {"unitcount", 0}, {"relationcount", 1}}
+			removable := append(bson.D{{"_id", ep.ApplicationName}}, hasLastRef...)
+			if err := applications.Find(removable).One(&svc.doc); err == nil {
+				return svc.removeOps(hasLastRef)
+			} else if err != mgo.ErrNotFound {
+				return nil, err
+			}
+			// If not, we must check that this is still the case when the
+			// transaction is applied.
+			asserts = bson.D{{"$or", []bson.D{
+				{{"life", Alive}},
+				{{"unitcount", bson.D{{"$gt", 0}}}},
+				{{"relationcount", bson.D{{"$gt", 1}}}},
+			}}}
+		default:
+			return nil, fmt.Errorf("unknown state type %T", r.st)
 		}
-		// If not, we must check that this is still the case when the
-		// transaction is applied.
-		asserts = bson.D{{"$or", []bson.D{
-			{{"life", Alive}},
-			{{"unitcount", bson.D{{"$gt", 0}}}},
-			{{"relationcount", bson.D{{"$gt", 1}}}},
-		}}}
 	}
-	return []txn.Op{{
-		C:      applicationsC,
-		Id:     r.st.docID(ep.ApplicationName),
-		Assert: asserts,
-		Update: bson.D{{"$inc", bson.D{{"relationcount", -1}}}},
-	}}, nil
+	switch r.st.(type) {
+	case *CAASState:
+		return []txn.Op{{
+			C:      caasApplicationsC,
+			Id:     r.st.docID(ep.ApplicationName),
+			Assert: asserts,
+			Update: bson.D{{"$inc", bson.D{{"relationcount", -1}}}},
+		}}, nil
+	case *State:
+		return []txn.Op{{
+			C:      applicationsC,
+			Id:     r.st.docID(ep.ApplicationName),
+			Assert: asserts,
+			Update: bson.D{{"$inc", bson.D{{"relationcount", -1}}}},
+		}}, nil
+	default:
+		return nil, fmt.Errorf("unknown state type %T", r.st)
+	}
 }
 
 func (r *Relation) removeRemoteEndpointOps(ep Endpoint, unitDying bool) ([]txn.Op, error) {
@@ -341,8 +400,16 @@ func (r *Relation) RemoteUnit(unitName string) (*RelationUnit, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	if _, err := r.st.RemoteApplication(serviceName); err != nil {
-		return nil, errors.Trace(err)
+	switch st := r.st.(type) {
+	case *CAASState:
+		// XXX CAAS
+		return nil, errors.New("unsupported")
+	case *State:
+		if _, err := st.RemoteApplication(serviceName); err != nil {
+			return nil, errors.Trace(err)
+		}
+	default:
+		return nil, fmt.Errorf("unknown state type %T", r.st)
 	}
 	// Only non-subordinate services may be offered for remote
 	// relation, so all remote units are principals.
@@ -356,22 +423,25 @@ func (r *Relation) RemoteUnit(unitName string) (*RelationUnit, error) {
 // relation.
 func (r *Relation) IsCrossModel() (bool, error) {
 	for _, ep := range r.Endpoints() {
-		_, err := r.st.RemoteApplication(ep.ApplicationName)
-		if err == nil {
-			return true, nil
-		} else if !errors.IsNotFound(err) {
-			return false, errors.Trace(err)
+		switch st := r.st.(type) {
+		case *CAASState:
+			// XXX CAAS
+			return false, errors.New("unsupported")
+		case *State:
+			_, err := st.RemoteApplication(ep.ApplicationName)
+			if err == nil {
+				return true, nil
+			} else if !errors.IsNotFound(err) {
+				return false, errors.Trace(err)
+			}
+		default:
+			return false, fmt.Errorf("unknown state type %T", r.st)
 		}
 	}
 	return false, nil
 }
 
-func (r *Relation) unit(
-	unitName string,
-	principal string,
-	isPrincipal bool,
-	checkUnitLife bool,
-) (*RelationUnit, error) {
+func (r *Relation) unit(unitName string, principal string, isPrincipal bool, checkUnitLife bool) (*RelationUnit, error) {
 	serviceName, err := names.UnitApplication(unitName)
 	if err != nil {
 		return nil, err
