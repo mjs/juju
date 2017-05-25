@@ -124,3 +124,10 @@ func (c *Client) AddCAASUnits(appName string, numUnits int) ([]string, error) {
 	}
 	return result.Units, nil
 }
+
+func (c *Client) AddCAASRelation(endpoints ...string) (*params.AddRelationResults, error) {
+	var addRelRes params.AddRelationResults
+	params := params.AddRelation{Endpoints: endpoints}
+	err := c.facade.FacadeCall("AddRelation", params, &addRelRes)
+	return &addRelRes, err
+}
