@@ -262,3 +262,22 @@ func (facade *Facade) AddRelation(args params.AddRelation) (params.AddRelationRe
 	}
 	return params.AddRelationResults{Endpoints: outEps}, nil
 }
+
+// DestroyRelation removes the relation between the specified endpoints.
+func (facade *Facade) DestroyRelation(args params.DestroyRelation) error {
+	/*if err := facade.checkCanWrite(); err != nil {
+		return err
+	}
+	if err := facade.check.RemoveAllowed(); err != nil {
+		return errors.Trace(err)
+	}*/
+	eps, err := facade.backend.InferEndpoints(args.Endpoints...)
+	if err != nil {
+		return err
+	}
+	rel, err := facade.backend.EndpointsRelation(eps...)
+	if err != nil {
+		return err
+	}
+	return rel.Destroy()
+}

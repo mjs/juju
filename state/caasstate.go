@@ -652,6 +652,17 @@ func aliveCAASApplication(st *CAASState, name string) (ApplicationEntity, error)
 	return app, err
 }
 
+// EndpointsRelation returns the existing relation with the given endpoints.
+func (st *CAASState) EndpointsRelation(endpoints ...Endpoint) (*Relation, error) {
+	return st.KeyRelation(relationKey(endpoints))
+}
+
+// KeyRelation returns the existing relation with the given key (which can
+// be derived unambiguously from the relation's endpoints).
+func (st *CAASState) KeyRelation(key string) (*Relation, error) {
+	return keyRelation(st, key)
+}
+
 // AllRelations returns all relations in the model ordered by id.
 func (st *CAASState) AllRelations() (relations []*Relation, err error) {
 	return allRelations(st)
