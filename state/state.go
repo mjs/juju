@@ -1841,6 +1841,10 @@ func (st *State) EndpointsRelation(endpoints ...Endpoint) (*Relation, error) {
 // KeyRelation returns the existing relation with the given key (which can
 // be derived unambiguously from the relation's endpoints).
 func (st *State) KeyRelation(key string) (*Relation, error) {
+	return keyRelation(st, key)
+}
+
+func keyRelation(st modelBackend, key string) (*Relation, error) {
 	relations, closer := st.db().GetCollection(relationsC)
 	defer closer()
 
