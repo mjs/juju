@@ -651,3 +651,8 @@ func aliveCAASApplication(st *CAASState, name string) (ApplicationEntity, error)
 	}
 	return app, err
 }
+
+// AllRelations returns all relations in the model ordered by id.
+func (st *CAASState) AllRelations() (relations []*Relation, err error) {
+	return allRelations(st)
+}
