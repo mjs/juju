@@ -131,3 +131,8 @@ func (c *Client) AddCAASRelation(endpoints ...string) (*params.AddRelationResult
 	err := c.facade.FacadeCall("AddRelation", params, &addRelRes)
 	return &addRelRes, err
 }
+
+func (c *Client) DestroyCAASRelation(endpoints ...string) error {
+	params := params.DestroyRelation{Endpoints: endpoints}
+	return c.facade.FacadeCall("DestroyRelation", params, nil)
+}
