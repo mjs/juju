@@ -41,7 +41,7 @@ func (ep Endpoint) String() string {
 	return ep.ApplicationName + ":" + ep.Name
 }
 
-// CanRelateTo returns whether a relation may be established between e and other.
+// CanRelateTo returns whether a relation may be established between ep and other.
 func (ep Endpoint) CanRelateTo(other Endpoint) bool {
 	return ep.ApplicationName != other.ApplicationName &&
 		ep.Interface == other.Interface &&

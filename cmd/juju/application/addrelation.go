@@ -13,12 +13,14 @@ import (
 	"gopkg.in/juju/names.v2"
 
 	"github.com/juju/juju/api/application"
+	"github.com/juju/juju/api/caasapplication"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/cmd/juju/block"
 	"github.com/juju/juju/cmd/juju/common"
 	"github.com/juju/juju/cmd/modelcmd"
 	"github.com/juju/juju/core/crossmodel"
 	"github.com/juju/juju/feature"
+	"github.com/juju/juju/jujuclient"
 )
 
 const addRelationDocCrossModel = `
@@ -56,7 +58,13 @@ func NewAddRelationCommand() cmd.Command {
 			return nil, errors.Trace(err)
 		}
 		return application.NewClient(root), nil
-
+	}
+	cmd.newCAASAPIFunc = func() (*caasapplication.Client, error) {
+		root, err := cmd.NewAPIRoot()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return caasapplication.NewClient(root), nil
 	}
 	return modelcmd.Wrap(cmd)
 }
@@ -67,6 +75,7 @@ type addRelationCommand struct {
 	Endpoints      []string
 	remoteEndpoint string
 	newAPIFunc     func() (ApplicationAddRelationAPI, error)
+	newCAASAPIFunc func() (*caasapplication.Client, error)
 }
 
 func (c *addRelationCommand) Info() *cmd.Info {
@@ -102,6 +111,33 @@ type ApplicationAddRelationAPI interface {
 }
 
 func (c *addRelationCommand) Run(ctx *cmd.Context) error {
+	store := c.ClientStore()
+	modelDetails, err := store.ModelByName(c.ControllerName(), c.ModelName())
+	if errors.IsNotFound(err) {
+		if err := c.RefreshModels(store, c.ControllerName()); err != nil {
+			return errors.Annotate(err, "refreshing models cache")
+		}
+		// Now try again.
+		modelDetails, err = store.ModelByName(c.ControllerName(), c.ModelName())
+	}
+	if err != nil {
+		return errors.Annotate(err, "getting model details")
+	}
+
+	if modelDetails.Type == jujuclient.CAASModel {
+		client, err := c.newCAASAPIFunc()
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+
+		_, err = client.AddCAASRelation(c.Endpoints...)
+		if params.IsCodeUnauthorized(err) {
+			common.PermissionsMessage(ctx.Stderr, "add a relation")
+		}
+		return block.ProcessBlockedError(err, block.BlockChange)
+	}
+
 	client, err := c.newAPIFunc()
 	if err != nil {
 		return err
