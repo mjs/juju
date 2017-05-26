@@ -8,8 +8,10 @@ import (
 	"github.com/juju/errors"
 
 	"github.com/juju/juju/api/application"
+	"github.com/juju/juju/api/caasapplication"
 	"github.com/juju/juju/cmd/juju/block"
 	"github.com/juju/juju/cmd/modelcmd"
+	"github.com/juju/juju/jujuclient"
 )
 
 var helpSummary = `
@@ -46,7 +48,13 @@ func NewRemoveRelationCommand() cmd.Command {
 			return nil, errors.Trace(err)
 		}
 		return application.NewClient(root), nil
-
+	}
+	cmd.newCAASAPIFunc = func() (*caasapplication.Client, error) {
+		root, err := cmd.NewAPIRoot()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return caasapplication.NewClient(root), nil
 	}
 	return modelcmd.Wrap(cmd)
 }
@@ -54,8 +62,9 @@ func NewRemoveRelationCommand() cmd.Command {
 // removeRelationCommand causes an existing application relation to be shut down.
 type removeRelationCommand struct {
 	modelcmd.ModelCommandBase
-	Endpoints  []string
-	newAPIFunc func() (ApplicationDestroyRelationAPI, error)
+	Endpoints      []string
+	newAPIFunc     func() (ApplicationDestroyRelationAPI, error)
+	newCAASAPIFunc func() (*caasapplication.Client, error)
 }
 
 func (c *removeRelationCommand) Info() *cmd.Info {
@@ -82,6 +91,28 @@ type ApplicationDestroyRelationAPI interface {
 }
 
 func (c *removeRelationCommand) Run(_ *cmd.Context) error {
+	store := c.ClientStore()
+	modelDetails, err := store.ModelByName(c.ControllerName(), c.ModelName())
+	if errors.IsNotFound(err) {
+		if err := c.RefreshModels(store, c.ControllerName()); err != nil {
+			return errors.Annotate(err, "refreshing models cache")
+		}
+		// Now try again.
+		modelDetails, err = store.ModelByName(c.ControllerName(), c.ModelName())
+	}
+	if err != nil {
+		return errors.Annotate(err, "getting model details")
+	}
+
+	if modelDetails.Type == jujuclient.CAASModel {
+		client, err := c.newCAASAPIFunc()
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+		return block.ProcessBlockedError(client.DestroyCAASRelation(c.Endpoints...), block.BlockRemove)
+	}
+
 	client, err := c.newAPIFunc()
 	if err != nil {
 		return err
