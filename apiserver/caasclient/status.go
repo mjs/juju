@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/juju/errors"
+	"github.com/juju/utils/set"
 	"gopkg.in/juju/charm.v6-unstable"
 
 	"github.com/juju/juju/apiserver/common"
@@ -28,6 +29,9 @@ func (c *Client) Status(args params.StatusParams) (params.CAASStatus, error) {
 		fetchAllApplicationsAndUnits(c.api.state, len(args.Patterns) <= 0); err != nil {
 		return noStatus, errors.Annotate(err, "could not fetch applications and units")
 	}
+	if context.relations, err = fetchRelations(c.api.state); err != nil {
+		return noStatus, errors.Annotate(err, "could not fetch relations")
+	}
 
 	logger.Debugf("Applications: %v", context.applications)
 
@@ -38,6 +42,7 @@ func (c *Client) Status(args params.StatusParams) (params.CAASStatus, error) {
 	return params.CAASStatus{
 		Model:        modelStatus,
 		Applications: context.processCAASApplications(),
+		Relations:    context.processRelations(),
 	}, nil
 }
 
@@ -106,6 +111,26 @@ func fetchAllApplicationsAndUnits(st *state.CAASState, matchAny bool) (map[strin
 	return appMap, unitMap, latestCharms, nil
 }
 
+// fetchRelations returns a map of all relations keyed by application name.
+//
+// This structure is useful for processApplicationRelations() which needs
+// to have the relations for each application. Reading them once here
+// avoids the repeated DB hits to retrieve the relations for each
+// application that used to happen in processApplicationRelations().
+func fetchRelations(st *state.CAASState) (map[string][]*state.Relation, error) {
+	relations, err := st.AllRelations()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string][]*state.Relation)
+	for _, relation := range relations {
+		for _, ep := range relation.Endpoints() {
+			out[ep.ApplicationName] = append(out[ep.ApplicationName], relation)
+		}
+	}
+	return out, nil
+}
+
 func (context *statusContext) processCAASApplications() map[string]params.CAASApplicationStatus {
 	caasApps := make(map[string]params.CAASApplicationStatus)
 	for _, s := range context.applications {
@@ -123,6 +148,12 @@ func (context *statusContext) processCAASApplication(caasApp *state.CAASApplicat
 	var processedStatus = params.CAASApplicationStatus{
 		Charm: caasAppCharm.URL().String(),
 		Life:  processLife(caasApp),
+	}
+
+	processedStatus.Relations, err = context.processCAASApplicationRelations(caasApp)
+	if err != nil {
+		processedStatus.Err = common.ServerError(err)
+		return processedStatus
 	}
 
 	if latestCharm, ok := context.latestCharms[*caasAppCharm.URL().WithRevision(-1)]; ok && latestCharm != nil {
@@ -167,6 +198,30 @@ func (context *statusContext) processUnits(units map[string]*state.CAASUnit, caa
 	return unitsMap
 }
 
+func (context *statusContext) processCAASApplicationRelations(caasApp *state.CAASApplication) (related map[string][]string, err error) {
+	related = make(map[string][]string)
+	relations := context.relations[caasApp.Name()]
+	for _, relation := range relations {
+		ep, err := relation.Endpoint(caasApp.Name())
+		if err != nil {
+			return nil, err
+		}
+		relationName := ep.Relation.Name
+		eps, err := relation.RelatedEndpoints(caasApp.Name())
+		if err != nil {
+			return nil, err
+		}
+		for _, ep := range eps {
+			related[relationName] = append(related[relationName], ep.ApplicationName)
+		}
+	}
+	for relationName, applicationNames := range related {
+		sn := set.NewStrings(applicationNames...)
+		related[relationName] = sn.SortedValues()
+	}
+	return related, nil
+}
+
 func (context *statusContext) processUnit(unit *state.CAASUnit, caasAppCharm string) params.CAASUnitStatus {
 	var result params.CAASUnitStatus
 	/*addr, err := unit.PublicAddress()
@@ -195,6 +250,51 @@ func (context *statusContext) processUnit(unit *state.CAASUnit, caasAppCharm str
 	//processUnitAndAgentStatus(unit, &result)
 
 	return result
+}
+
+func (context *statusContext) processRelations() []params.RelationStatus {
+	var out []params.RelationStatus
+	relations := context.getAllRelations()
+	for _, relation := range relations {
+		var eps []params.EndpointStatus
+		var scope charm.RelationScope
+		var relationInterface string
+		for _, ep := range relation.Endpoints() {
+			eps = append(eps, params.EndpointStatus{
+				ApplicationName: ep.ApplicationName,
+				Name:            ep.Name,
+				Role:            string(ep.Role),
+			})
+			// these should match on both sides so use the last
+			relationInterface = ep.Interface
+			scope = ep.Scope
+		}
+		relStatus := params.RelationStatus{
+			Id:        relation.Id(),
+			Key:       relation.String(),
+			Interface: relationInterface,
+			Scope:     string(scope),
+			Endpoints: eps,
+		}
+		out = append(out, relStatus)
+	}
+	return out
+}
+
+// This method exists only to dedup the loaded relations as they will
+// appear multiple times in context.relations.
+func (context *statusContext) getAllRelations() []*state.Relation {
+	var out []*state.Relation
+	seenRelations := make(map[int]bool)
+	for _, relations := range context.relations {
+		for _, relation := range relations {
+			if _, found := seenRelations[relation.Id()]; !found {
+				out = append(out, relation)
+				seenRelations[relation.Id()] = true
+			}
+		}
+	}
+	return out
 }
 
 type lifer interface {

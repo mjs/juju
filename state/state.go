@@ -1806,6 +1806,10 @@ func (st *State) Relation(id int) (*Relation, error) {
 
 // AllRelations returns all relations in the model ordered by id.
 func (st *State) AllRelations() (relations []*Relation, err error) {
+	return allRelations(st)
+}
+
+func allRelations(st modelBackend) (relations []*Relation, err error) {
 	relationsCollection, closer := st.db().GetCollection(relationsC)
 	defer closer()
 
