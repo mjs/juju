@@ -11,9 +11,11 @@ import (
 
 	"github.com/juju/juju/api/application"
 	"github.com/juju/juju/api/applicationoffers"
+	"github.com/juju/juju/api/caasapplication"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/cmd/modelcmd"
 	"github.com/juju/juju/core/crossmodel"
+	"github.com/juju/juju/jujuclient"
 )
 
 var usageConsumeSummary = `
@@ -103,9 +105,46 @@ func (c *consumeCommand) getSourceAPI() (applicationConsumeDetailsAPI, error) {
 	return applicationoffers.NewClient(root), nil
 }
 
+func (c *consumeCommand) getCAASAPI() (*caasapplication.Client, error) {
+	root, err := c.NewAPIRoot()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return caasapplication.NewClient(root), nil
+}
+
 // Run adds the requested remote offer to the model. Implements
 // cmd.Command.
 func (c *consumeCommand) Run(ctx *cmd.Context) error {
+	store := c.ClientStore()
+	modelDetails, err := store.ModelByName(c.ControllerName(), c.ModelName())
+	if errors.IsNotFound(err) {
+		if err := c.RefreshModels(store, c.ControllerName()); err != nil {
+			return errors.Annotate(err, "refreshing models cache")
+		}
+		// Now try again.
+		modelDetails, err = store.ModelByName(c.ControllerName(), c.ModelName())
+	}
+	if err != nil {
+		return errors.Annotate(err, "getting model details")
+	}
+
+	if modelDetails.Type == jujuclient.CAASModel {
+		// XXX CAAS
+		client, err := c.getCAASAPI()
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+		localName, err := client.Consume(c.remoteApplication, c.applicationAlias)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		ctx.Infof("Added %s as %s", c.remoteApplication, localName)
+		return nil
+	}
+
+	client, err := c.getAPI()
 	accountDetails, err := c.CurrentAccountDetails()
 	if err != nil {
 		return errors.Trace(err)
