@@ -199,8 +199,16 @@ func (c *addUnitCommand) getCAASAPI() (caasAddUnitAPI, error) {
 // Run connects to the environment specified on the command line
 // and calls AddUnits for the given application.
 func (c *addUnitCommand) Run(ctx *cmd.Context) error {
+	controllerName, err := c.ControllerName()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	modelName, err := c.ModelName()
+	if err != nil {
+		return errors.Trace(err)
+	}
 	store := c.ClientStore()
-	modelDetails, err := store.ModelByName(c.ControllerName(), c.ModelName())
+	modelDetails, err := store.ModelByName(controllerName, modelName)
 	if err != nil {
 		return err
 	}

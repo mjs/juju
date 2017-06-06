@@ -144,20 +144,23 @@ var newAPICAASClientForStatus = func(c *statusCommand) (caasStatusAPI, error) {
 }
 
 func (c *statusCommand) Run(ctx *cmd.Context) error {
+	controllerName, err := c.ControllerName()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	modelName, err := c.ModelName()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	store := c.ClientStore()
-	modelDetails, err := store.ModelByName(
-		c.ControllerName(),
-		c.ModelName(),
-	)
+	modelDetails, err := store.ModelByName(controllerName, modelName)
 	if errors.IsNotFound(err) {
-		if err := c.RefreshModels(store, c.ControllerName()); err != nil {
+		if err := c.RefreshModels(store, controllerName); err != nil {
 			return errors.Annotate(err, "refreshing models cache")
 		}
 		// Now try again.
-		modelDetails, err = store.ModelByName(
-			c.ControllerName(),
-			c.ModelName(),
-		)
+		modelDetails, err = store.ModelByName(controllerName, modelName)
 	}
 	if err != nil {
 		return errors.Annotate(err, "getting model details")
@@ -189,7 +192,11 @@ func (c *statusCommand) caasStatus(ctx *cmd.Context) error {
 		return errors.Errorf("unable to obtain the current status")
 	}
 
-	formatter := newCAASStatusFormatter(status, c.ControllerName(), c.isoTime)
+	controllerName, err := c.ControllerName()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	formatter := newCAASStatusFormatter(status, controllerName, c.isoTime)
 	formatted, err := formatter.format()
 	if err != nil {
 		return err

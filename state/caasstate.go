@@ -43,17 +43,20 @@ func newCAASState(parentSt *State, modelTag names.ModelTag, clock clock.Clock) (
 		}
 	}()
 
+	schema := allCollections()
 	rawDB := session.DB(jujuDB)
-	database, err := allCollections().Load(rawDB, modelTag.Id(), nil)
-	if err != nil {
-		return nil, errors.Trace(err)
+	db := &database{
+		raw:                    rawDB,
+		schema:                 schema,
+		modelUUID:              modelTag.Id(),
+		runTransactionObserver: nil,
 	}
 
 	return &CAASState{
 		modelTag:      modelTag,
 		controllerTag: parentSt.ControllerTag(),
 		session:       session,
-		database:      database,
+		database:      db,
 		clock:         clock,
 	}, nil
 }

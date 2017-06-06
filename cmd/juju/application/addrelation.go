@@ -62,7 +62,7 @@ type addRelationCommand struct {
 	remoteEndpoint        *crossmodel.ApplicationURL
 	addRelationAPI        applicationAddRelationAPI
 	consumeDetailsAPI     applicationConsumeDetailsAPI
-	caasAddRelationAPI    applicationAddRelationAPI
+	caasAddRelationAPI    *caasapplication.Client
 	caasConsumeDetailsAPI applicationConsumeDetailsAPI
 }
 
@@ -110,7 +110,7 @@ func (c *addRelationCommand) getAddRelationAPI() (applicationAddRelationAPI, err
 	return application.NewClient(root), nil
 }
 
-func (c *addRelationCommand) getCAASAddRelationAPI() (applicationAddRelationAPI, error) {
+func (c *addRelationCommand) getCAASAddRelationAPI() (*caasapplication.Client, error) {
 	if c.caasAddRelationAPI != nil {
 		return c.caasAddRelationAPI, nil
 	}
@@ -155,14 +155,22 @@ func (c *addRelationCommand) getCAASOffersAPI() (applicationConsumeDetailsAPI, e
 }
 
 func (c *addRelationCommand) Run(ctx *cmd.Context) error {
+	controllerName, err := c.ControllerName()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	modelName, err := c.ModelName()
+	if err != nil {
+		return errors.Trace(err)
+	}
 	store := c.ClientStore()
-	modelDetails, err := store.ModelByName(c.ControllerName(), c.ModelName())
+	modelDetails, err := store.ModelByName(controllerName, modelName)
 	if errors.IsNotFound(err) {
-		if err := c.RefreshModels(store, c.ControllerName()); err != nil {
+		if err := c.RefreshModels(store, controllerName); err != nil {
 			return errors.Annotate(err, "refreshing models cache")
 		}
 		// Now try again.
-		modelDetails, err = store.ModelByName(c.ControllerName(), c.ModelName())
+		modelDetails, err = store.ModelByName(controllerName, modelName)
 	}
 	if err != nil {
 		return errors.Annotate(err, "getting model details")

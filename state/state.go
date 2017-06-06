@@ -44,6 +44,7 @@ import (
 	stateaudit "github.com/juju/juju/state/internal/audit"
 	statelease "github.com/juju/juju/state/lease"
 	"github.com/juju/juju/state/presence"
+	statestorage "github.com/juju/juju/state/storage"
 	"github.com/juju/juju/state/watcher"
 	"github.com/juju/juju/status"
 	"github.com/juju/juju/storage"
@@ -532,8 +533,8 @@ func (st *State) db() Database {
 }
 
 // newStorage is part of the modelBackend interface.
-func (st *State) newStorage() storage.Storage {
-	return storage.NewStorage(st.ModelUUID(), st.MongoSession())
+func (st *State) newStorage() statestorage.Storage {
+	return statestorage.NewStorage(st.ModelUUID(), st.MongoSession())
 }
 
 // txnLogWatcher returns the TxnLogWatcher for the State. It is part

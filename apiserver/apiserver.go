@@ -53,30 +53,30 @@ const loginRateLimit = 10
 
 // Server holds the server side of the API.
 type Server struct {
-	tomb              tomb.Tomb
-	clock             clock.Clock
-	pingClock         clock.Clock
-	wg                sync.WaitGroup
-	state             *state.State
-	statePool         *state.StatePool
-	caasStatePool     *state.CAASStatePool
-	lis               net.Listener
-	tag               names.Tag
-	dataDir           string
-	logDir            string
-	limiter           utils.Limiter
-	validator         LoginValidator
-	facades           *facade.Registry
-	modelUUID         string
-	authCtxt          *authContext
-	lastConnectionID  uint64
-	centralHub        *pubsub.StructuredHub
-	newObserver       observer.ObserverFactory
-	connCount         int64
-	certChanged       <-chan params.StateServingInfo
-	tlsConfig         *tls.Config
-	allowModelAccess  bool
-	logSinkWriter     io.WriteCloser
+	tomb             tomb.Tomb
+	clock            clock.Clock
+	pingClock        clock.Clock
+	wg               sync.WaitGroup
+	state            *state.State
+	statePool        *state.StatePool
+	caasStatePool    *state.CAASStatePool
+	lis              net.Listener
+	tag              names.Tag
+	dataDir          string
+	logDir           string
+	limiter          utils.Limiter
+	validator        LoginValidator
+	facades          *facade.Registry
+	modelUUID        string
+	authCtxt         *authContext
+	lastConnectionID uint64
+	centralHub       *pubsub.StructuredHub
+	newObserver      observer.ObserverFactory
+	connCount        int64
+	certChanged      <-chan params.StateServingInfo
+	tlsConfig        *tls.Config
+	allowModelAccess bool
+	logSinkWriter    io.WriteCloser
 
 	// mu guards the fields below it.
 	mu sync.Mutex
@@ -702,7 +702,7 @@ func (srv *Server) serveConn(wsConn *websocket.Conn, modelUUID string, apiObserv
 	}
 
 	adminAPIs := make(map[int]interface{})
-	for apiVersion, factory := range srv.adminAPIFactories {
+	for apiVersion, factory := range adminAPIFactories {
 		adminAPIs[apiVersion] = factory(srv, h, apiObserver)
 	}
 	conn.ServeRoot(newAnonRoot(h, adminAPIs), serverError)

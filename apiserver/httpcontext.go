@@ -33,10 +33,6 @@ type httpContext struct {
 // using for the model implicit in the given request
 // without checking any authentication information.
 func (ctxt *httpContext) stateForRequestUnauthenticated(r *http.Request) (*stateUnion, func(), error) {
-	modelUUID, _, err := ctxt.modelUUIDFromRequest(r)
-	if err != nil {
-		return nil, nil, errors.Trace(err)
-	}
 	modelUUID, isCAAS, err := validateModelUUID(validateArgs{
 		statePool:           ctxt.srv.statePool,
 		modelUUID:           r.URL.Query().Get(":modeluuid"),

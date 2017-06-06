@@ -168,7 +168,7 @@ func (c *modelsCommand) Run(ctx *cmd.Context) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		model.ControllerName = c.ControllerName()
+		model.ControllerName = controllerName
 		caasModelInfo = append(caasModelInfo, model)
 	}
 	iaasModelInfo := make([]common.ModelInfo, 0, len(paramIAASModelInfo))
@@ -181,8 +181,6 @@ func (c *modelsCommand) Run(ctx *cmd.Context) error {
 		iaasModelInfo = append(iaasModelInfo, model)
 	}
 	modelSet := ModelSet{CAASModels: caasModelInfo, IAASModels: iaasModelInfo}
-
-	modelSet := ModelSet{Models: modelInfo}
 	current, err := c.ClientStore().CurrentModel(controllerName)
 	if err != nil && !errors.IsNotFound(err) {
 		return err
@@ -334,10 +332,6 @@ func (c *modelsCommand) formatTabular(writer io.Writer, value interface{}) error
 			w.Print(model.UUID)
 		}
 		w.Print("IAAS")
-		lastConnection := model.Users[userForLastConn.Id()].LastConnection
-		if lastConnection == "" {
-			lastConnection = "never connected"
-		}
 		userForAccess := loggedInUser
 		if c.user != "" {
 			userForAccess = names.NewUserTag(c.user)
@@ -371,8 +365,12 @@ func (c *modelsCommand) formatTabular(writer io.Writer, value interface{}) error
 	}
 	for _, model := range modelSet.CAASModels {
 		owner := names.NewUserTag(model.Owner)
-		name := common.OwnerQualifiedModelName(model.Name, owner, userForListing)
-		if jujuclient.JoinOwnerModelName(owner, model.Name) == modelSet.CurrentModelQualified {
+		name := model.Name
+		if currentUser == owner {
+			// No need to display fully qualified model name to its owner.
+			name = model.ShortName
+		}
+		if model.Name == modelSet.CurrentModelQualified {
 			name += "*"
 			w.PrintColor(output.CurrentHighlight, name)
 		} else {

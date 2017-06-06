@@ -105,7 +105,7 @@ func (c *consumeCommand) getSourceAPI() (applicationConsumeDetailsAPI, error) {
 	return applicationoffers.NewClient(root), nil
 }
 
-func (c *consumeCommand) getCAASAPI() (*caasapplication.Client, error) {
+func (c *consumeCommand) getCAASTargetAPI() (*caasapplication.Client, error) {
 	root, err := c.NewAPIRoot()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -116,27 +116,62 @@ func (c *consumeCommand) getCAASAPI() (*caasapplication.Client, error) {
 // Run adds the requested remote offer to the model. Implements
 // cmd.Command.
 func (c *consumeCommand) Run(ctx *cmd.Context) error {
+	controllerName, err := c.ControllerName()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	modelName, err := c.ModelName()
+	if err != nil {
+		return errors.Trace(err)
+	}
 	store := c.ClientStore()
-	modelDetails, err := store.ModelByName(c.ControllerName(), c.ModelName())
+	modelDetails, err := store.ModelByName(controllerName, modelName)
 	if errors.IsNotFound(err) {
-		if err := c.RefreshModels(store, c.ControllerName()); err != nil {
+		if err := c.RefreshModels(store, controllerName); err != nil {
 			return errors.Annotate(err, "refreshing models cache")
 		}
 		// Now try again.
-		modelDetails, err = store.ModelByName(c.ControllerName(), c.ModelName())
+		modelDetails, err = store.ModelByName(controllerName, modelName)
 	}
 	if err != nil {
 		return errors.Annotate(err, "getting model details")
 	}
 
 	if modelDetails.Type == jujuclient.CAASModel {
-		// XXX CAAS
-		client, err := c.getCAASAPI()
+		accountDetails, err := c.CurrentAccountDetails()
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
-		defer client.Close()
-		localName, err := client.Consume(c.remoteApplication, c.applicationAlias)
+		url, err := crossmodel.ParseApplicationURL(c.remoteApplication)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if url.HasEndpoint() {
+			return errors.Errorf("remote offer %q shouldn't include endpoint", c.remoteApplication)
+		}
+		if url.User == "" {
+			url.User = accountDetails.User
+			c.remoteApplication = url.Path()
+		}
+		sourceClient, err := c.getSourceAPI()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		defer sourceClient.Close()
+
+		consumeDetails, err := sourceClient.GetConsumeDetails(url.String())
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		targetClient, err := c.getCAASTargetAPI()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		defer targetClient.Close()
+
+		//
+		localName, err := targetClient.Consume(*consumeDetails.Offer, c.applicationAlias, consumeDetails.Macaroon)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -144,7 +179,6 @@ func (c *consumeCommand) Run(ctx *cmd.Context) error {
 		return nil
 	}
 
-	client, err := c.getAPI()
 	accountDetails, err := c.CurrentAccountDetails()
 	if err != nil {
 		return errors.Trace(err)

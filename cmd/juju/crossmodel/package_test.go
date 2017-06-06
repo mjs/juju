@@ -32,8 +32,8 @@ func (s *BaseCrossModelSuite) SetUpTest(c *gc.C) {
 	s.store.Models[controllerName] = &jujuclient.ControllerModels{
 		CurrentModel: "fred/test",
 		Models: map[string]jujuclient.ModelDetails{
-			"bob/test": {ModelUUID: "test-uuid"},
-			"bob/prod": {ModelUUID: "prod-uuid"},
+			"bob/test":  {ModelUUID: "test-uuid"},
+			"bob/prod":  {ModelUUID: "prod-uuid"},
 			"fred/test": {ModelUUID: "fred-uuid"},
 		},
 	}

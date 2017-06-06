@@ -188,7 +188,7 @@ func (a *CAASApplication) removeOps(asserts bson.D) ([]txn.Op, error) {
 	// such that it's safe to run multiple times.
 	name := a.doc.Name
 	curl := a.doc.CharmURL
-	charmOps, err := appCharmDecRefOps(a.st, name, curl)
+	charmOps, err := appCharmDecRefOps(a.st, name, curl, false)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -287,7 +287,7 @@ func (a *CAASApplication) changeCharmOps(
 	// Drop the references to the old settings, storage constraints,
 	// and charm docs (if the refs actually exist yet).
 	if oldSettings != nil {
-		decOps, err = appCharmDecRefOps(a.st, a.doc.Name, a.doc.CharmURL) // current charm
+		decOps, err = appCharmDecRefOps(a.st, a.doc.Name, a.doc.CharmURL, true) // current charm
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

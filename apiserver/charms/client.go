@@ -63,9 +63,8 @@ func NewFacade(ctx facade.Context) (*API, error) {
 	}
 
 	return &API{
-		access:     st,
 		authorizer: authorizer,
-		backend:    ctx.State(),
+		backend:    st,
 	}, nil
 }
 

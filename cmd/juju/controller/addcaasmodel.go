@@ -95,7 +95,10 @@ func (c *addCAASModelCommand) Run(ctx *cmd.Context) error {
 	defer api.Close()
 
 	store := c.ClientStore()
-	controllerName := c.ControllerName()
+	controllerName, err := c.ControllerName()
+	if err != nil {
+		return errors.Trace(err)
+	}
 	accountDetails, err := store.AccountDetails(controllerName)
 	if err != nil {
 		return errors.Trace(err)

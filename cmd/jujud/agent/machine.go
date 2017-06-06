@@ -1184,15 +1184,9 @@ func (a *MachineAgent) startCAASModelWorkers(controllerUUID, modelUUID string) (
 		RunFlagDuration:             time.Minute,
 		CharmRevisionUpdateInterval: 24 * time.Hour,
 		InstPollerAggregationDelay:  3 * time.Second,
-		// TODO(perrito666) the status history pruning numbers need
-		// to be adjusting, after collecting user data from large install
-		// bases, to numbers allowing a rich and useful back history.
-		StatusHistoryPrunerMaxHistoryTime: 336 * time.Hour, // 2 weeks
-		StatusHistoryPrunerMaxHistoryMB:   5120,            // 5G
-		StatusHistoryPrunerInterval:       5 * time.Minute,
-		SpacesImportedGate:                a.discoverSpacesComplete,
-		NewEnvironFunc:                    newEnvirons,
-		NewMigrationMaster:                migrationmaster.NewWorker,
+		StatusHistoryPrunerInterval: 5 * time.Minute,
+		NewEnvironFunc:              newEnvirons,
+		NewMigrationMaster:          migrationmaster.NewWorker,
 	})
 	if err := dependency.Install(engine, manifolds); err != nil {
 		if err := worker.Stop(engine); err != nil {
