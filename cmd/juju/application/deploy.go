@@ -731,7 +731,28 @@ func (c *DeployCommand) parseBind() error {
 }
 
 func (c *DeployCommand) Run(ctx *cmd.Context) error {
-	var err error
+	controllerName, err := c.ControllerName()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	modelName, err := c.ModelName()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	store := c.ClientStore()
+	modelDetails, err := store.ModelByName(controllerName, modelName)
+	if errors.IsNotFound(err) {
+		if err := c.RefreshModels(store, controllerName); err != nil {
+			return errors.Annotate(err, "refreshing models cache")
+		}
+		// Now try again.
+		modelDetails, err = store.ModelByName(controllerName, modelName)
+	}
+	if err != nil {
+		return errors.Annotate(err, "getting model details")
+	}
+	isCAAS := modelDetails.Type == jujuclient.CAASModel
+
 	c.Constraints, err = common.ParseConstraints(ctx, c.ConstraintsStr)
 	if err != nil {
 		return err
@@ -744,7 +765,7 @@ func (c *DeployCommand) Run(ctx *cmd.Context) error {
 
 	deploy, err := findDeployerFIFO(
 		c.maybeReadLocalBundle,
-		func() (deployFn, error) { return c.maybeReadLocalCharm(apiRoot) },
+		func() (deployFn, error) { return c.maybeReadLocalCharm(apiRoot, isCAAS) },
 		c.maybePredeployedLocalCharm,
 		c.maybeReadCharmstoreBundleFn(apiRoot),
 		c.charmStoreCharm, // This always returns a deployer
@@ -875,7 +896,7 @@ func (c *DeployCommand) maybeReadLocalBundle() (deployFn, error) {
 	}, nil
 }
 
-func (c *DeployCommand) maybeReadLocalCharm(apiRoot DeployAPI) (deployFn, error) {
+func (c *DeployCommand) maybeReadLocalCharm(apiRoot DeployAPI, isCAAS bool) (deployFn, error) {
 	// NOTE: Here we select the series using the algorithm defined by
 	// `seriesSelector.CharmSeries`. This serves to override the algorithm found in
 	// `charmrepo.NewCharmAtPath` which is outdated (but must still be
@@ -891,7 +912,7 @@ func (c *DeployCommand) maybeReadLocalCharm(apiRoot DeployAPI) (deployFn, error)
 
 	ch, err := charm.ReadCharm(c.CharmOrBundle)
 	series := c.Series
-	if err == nil {
+	if err == nil && !isCAAS {
 		modelCfg, err := getModelConfig(apiRoot)
 		if err != nil {
 			return nil, errors.Trace(err)
