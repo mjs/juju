@@ -52,7 +52,7 @@ func (st *State) ControllerTag() (names.ControllerTag, error) {
 	if err := result.Error; err != nil {
 		return names.NewControllerTag(""), err
 	}
-	return names.NewControllerTag(result.Result), nil
+	return names.ParseControllerTag(result.Result)
 }
 
 func (st *State) ModelTag() (names.ModelTag, error) {
@@ -63,7 +63,7 @@ func (st *State) ModelTag() (names.ModelTag, error) {
 	if err := result.Error; err != nil {
 		return names.NewModelTag(""), err
 	}
-	return names.NewModelTag(result.Result), nil
+	return names.ParseModelTag(result.Result)
 }
 
 func (st *State) ProvisioningConfig() (*Config, error) {
