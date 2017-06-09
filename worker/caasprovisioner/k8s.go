@@ -72,7 +72,7 @@ func ensureConfigMap(client *kubernetes.Clientset, appName string, newConfig new
 	}
 	if exists {
 		logger.Infof("ConfigMap %s already exists", mapName)
-	}else{
+	} else {
 		config, err := newConfig(appName)
 		if err != nil {
 			return "", errors.Annotate(err, "creating config")
