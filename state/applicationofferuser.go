@@ -56,6 +56,35 @@ func (st *State) CreateOfferAccess(offer names.ApplicationOfferTag, user names.U
 	return errors.Trace(err)
 }
 
+func (st *CAASState) CreateOfferAccess(offer names.ApplicationOfferTag, user names.UserTag, access permission.Access) error {
+	if err := permission.ValidateOfferAccess(access); err != nil {
+		return errors.Trace(err)
+	}
+
+	// Local users must exist.
+	if user.IsLocal() {
+		_, err := st.User(user)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return errors.Annotatef(err, "user %q does not exist locally", user.Name())
+			}
+			return errors.Trace(err)
+		}
+	}
+
+	offerUUID, err := applicationOfferUUID(st, offer.Name)
+	if err != nil {
+		return errors.Annotate(err, "creating offer access")
+	}
+	op := createPermissionOp(applicationOfferKey(offerUUID), userGlobalKey(userAccessID(user)), access)
+
+	err = st.db().RunTransaction([]txn.Op{op})
+	if err == txn.ErrAborted {
+		err = errors.AlreadyExistsf("permission for user %q for offer %q", user.Id(), offer.Name)
+	}
+	return errors.Trace(err)
+}
+
 // UpdateOfferAccess changes the user's access permissions on an offer.
 func (st *State) UpdateOfferAccess(offer names.ApplicationOfferTag, user names.UserTag, access permission.Access) error {
 	if err := permission.ValidateOfferAccess(access); err != nil {

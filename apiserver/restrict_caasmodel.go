@@ -16,6 +16,8 @@ var commonModelFacadeNames = set.NewStrings(
 	"Charms",
 	"Cleaner",
 	"Pinger",
+	"RelationUnitsWatcher",
+	"RemoteRelations",
 )
 
 // caasModelFacadeNames lists facades that are only used with CAAS

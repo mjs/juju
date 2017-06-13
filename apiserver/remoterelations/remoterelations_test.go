@@ -42,8 +42,7 @@ func (s *remoteRelationsSuite) SetUpTest(c *gc.C) {
 	}
 
 	s.st = newMockState()
-	pool := &mockStatePool{s.st}
-	api, err := remoterelations.NewRemoteRelationsAPI(s.st, pool, s.resources, s.authorizer)
+	api, err := remoterelations.NewRemoteRelationsAPI(s.st, s.resources, s.authorizer)
 	c.Assert(err, jc.ErrorIsNil)
 	s.api = api
 }

@@ -347,6 +347,10 @@ func (st *State) WatchRemoteApplications() StringsWatcher {
 	return newLifecycleWatcher(st, remoteApplicationsC, nil, isLocalID(st), nil)
 }
 
+func (st *CAASState) WatchRemoteApplications() StringsWatcher {
+	return newLifecycleWatcher(st, remoteApplicationsC, nil, isLocalID(st), nil)
+}
+
 // WatchStorageAttachments returns a StringsWatcher that notifies of
 // changes to the lifecycles of all storage instances attached to the
 // specified unit.
@@ -2660,6 +2664,14 @@ func (w *notifyCollWatcher) loop() error {
 // WatchRemoteRelations returns a StringsWatcher that notifies of changes to
 // the lifecycles of the remote relations in the model.
 func (st *State) WatchRemoteRelations() StringsWatcher {
+	return watchRemoteRelations(st)
+}
+
+func (st *CAASState) WatchRemoteRelations() StringsWatcher {
+	return watchRemoteRelations(st)
+}
+
+func watchRemoteRelations(st modelBackend) StringsWatcher {
 	// Use a no-op transform func to record the known ids.
 	known := make(map[interface{}]bool)
 	tr := func(id string) string {

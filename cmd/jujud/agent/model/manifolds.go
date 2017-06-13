@@ -331,6 +331,15 @@ func CAASManifolds(config ManifoldsConfig) dependency.Manifolds {
 			APICallerName: apiCallerName,
 		}),
 	}
+	if featureflag.Enabled(feature.CrossModelRelations) {
+		result[remoteRelationsName] = remoterelations.Manifold(remoterelations.ManifoldConfig{
+			AgentName:                agentName,
+			APICallerName:            apiCallerName,
+			NewAPIConnForModel:       api.NewConnectionForModel,
+			NewRemoteRelationsFacade: remoterelations.NewRemoteRelationsFacade,
+			NewWorker:                remoterelations.NewWorker,
+		})
+	}
 	return result
 }
 
