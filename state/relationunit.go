@@ -426,8 +426,12 @@ func (ru *RelationUnit) ReadSettings(uname string) (m map[string]interface{}, er
 func (ru *RelationUnit) SettingsAddress() (network.Address, error) {
 	st, ok := ru.st.(*State)
 	if !ok {
-		// XXX CAAS
-		return network.Address{}, errors.New("unsupported")
+		st := ru.st.(*CAASState)
+		unit, err := st.CAASUnit(ru.unitName)
+		if err != nil {
+			return network.Address{}, errors.Trace(err)
+		}
+		return unit.PrivateAddress()
 	}
 
 	unit, err := st.Unit(ru.unitName)

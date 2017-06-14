@@ -15,6 +15,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 	"gopkg.in/mgo.v2/txn"
 
+	"github.com/juju/juju/network"
 	"github.com/juju/juju/status"
 )
 
@@ -29,6 +30,10 @@ type caasUnitDoc struct {
 	CAASApplication string       `bson:"caasapplication"`
 	Resolved        ResolvedMode `bson:"resolved"`
 	Life            Life         `bson:"life"`
+
+	Addresses               []address
+	PreferredPublicAddress  address `bson:",omitempty"`
+	PreferredPrivateAddress address `bson:",omitempty"`
 }
 
 // Unit represents the state of a service unit.
@@ -397,6 +402,26 @@ func (u *CAASUnit) relations(predicate relationPredicate) ([]*Relation, error) {
 // 	}
 // 	return nil, false
 // }
+
+// PublicAddress returns the public address of the unit.
+func (u *CAASUnit) PublicAddress() (network.Address, error) {
+	publicAddress := u.doc.PreferredPublicAddress.networkAddress()
+	var err error
+	if publicAddress.Value == "" {
+		err = network.NoAddressError("public")
+	}
+	return publicAddress, err
+}
+
+// PrivateAddress returns the private address of the unit.
+func (u *CAASUnit) PrivateAddress() (network.Address, error) {
+	privateAddress := u.doc.PreferredPrivateAddress.networkAddress()
+	var err error
+	if privateAddress.Value == "" {
+		err = network.NoAddressError("private")
+	}
+	return privateAddress, err
+}
 
 // Refresh refreshes the contents of the Unit from the underlying
 // state. It an error that satisfies errors.IsNotFound if the unit has
