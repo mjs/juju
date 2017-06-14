@@ -389,6 +389,12 @@ func (r *Relation) RelatedEndpoints(applicationname string) ([]Endpoint, error) 
 	return eps, nil
 }
 
+// CAASUnit returns a RelationUnit for the supplied unit.
+func (r *Relation) CAASUnit(u *CAASUnit) (*RelationUnit, error) {
+	const checkUnitLife = true
+	return r.unit(u.Name(), "", true, checkUnitLife)
+}
+
 // Unit returns a RelationUnit for the supplied unit.
 func (r *Relation) Unit(u *Unit) (*RelationUnit, error) {
 	const checkUnitLife = true

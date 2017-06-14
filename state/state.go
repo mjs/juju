@@ -1862,6 +1862,10 @@ func keyRelation(st modelBackend, key string) (*Relation, error) {
 
 // Relation returns the existing relation with the given id.
 func (st *State) Relation(id int) (*Relation, error) {
+	return relation(st, id)
+}
+
+func relation(st modelBackend, id int) (*Relation, error) {
 	relations, closer := st.db().GetCollection(relationsC)
 	defer closer()
 

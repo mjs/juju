@@ -55,11 +55,16 @@ type applicationOfferDoc struct {
 var _ crossmodel.ApplicationOffers = (*applicationOffers)(nil)
 
 type applicationOffers struct {
-	st *State
+	st modelBackend
 }
 
 // NewApplicationOffers creates a application directory backed by a state instance.
 func NewApplicationOffers(st *State) crossmodel.ApplicationOffers {
+	return &applicationOffers{st: st}
+}
+
+// NewCAASApplicationOffers creates a application directory backed by a state instance.
+func NewCAASApplicationOffers(st *CAASState) crossmodel.ApplicationOffers {
 	return &applicationOffers{st: st}
 }
 
@@ -77,7 +82,7 @@ func ApplicationOfferEndpoint(offer crossmodel.ApplicationOffer, relationName st
 	return Endpoint{}, errors.NotFoundf("relation %q on application offer %q", relationName, offer.String())
 }
 
-func applicationOfferUUID(st *State, offerName string) (string, error) {
+func applicationOfferUUID(st modelBackend, offerName string) (string, error) {
 	appOffers := &applicationOffers{st: st}
 	offer, err := appOffers.offerForName(offerName)
 	if err != nil {
@@ -113,7 +118,7 @@ func (s *applicationOffers) ApplicationOffer(offerName string) (*crossmodel.Appl
 // Remove deletes the application offer for offerName immediately.
 func (s *applicationOffers) Remove(offerName string) (err error) {
 	defer errors.DeferredAnnotatef(&err, "cannot delete application offer %q", offerName)
-	err = s.st.runTransaction(s.removeOps(offerName))
+	err = s.st.db().RunTransaction(s.removeOps(offerName))
 	if err == txn.ErrAborted {
 		// Already deleted.
 		return nil
@@ -162,12 +167,29 @@ func (s *applicationOffers) AddOffer(offerArgs crossmodel.AddApplicationOfferArg
 	if err := s.validateOfferArgs(offerArgs); err != nil {
 		return nil, err
 	}
-	model, err := s.st.Model()
-	if err != nil {
-		return nil, errors.Trace(err)
-	} else if model.Life() != Alive {
-		return nil, errors.Errorf("model is no longer alive")
+
+	var assertActiveOp txn.Op
+	switch st := s.st.(type) {
+	case *CAASState:
+		model, err := st.CAASModel()
+		if err != nil {
+			return nil, errors.Trace(err)
+		} else if model.Life() != Alive {
+			return nil, errors.Errorf("model is no longer alive")
+		}
+		assertActiveOp = model.assertActiveOp()
+	case *State:
+		model, err := st.Model()
+		if err != nil {
+			return nil, errors.Trace(err)
+		} else if model.Life() != Alive {
+			return nil, errors.Errorf("model is no longer alive")
+		}
+		assertActiveOp = model.assertActiveOp()
+	default:
+		return nil, errors.Errorf("unknown state type %T", st)
 	}
+
 	uuid, err := utils.NewUUID()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -190,7 +212,7 @@ func (s *applicationOffers) AddOffer(offerArgs crossmodel.AddApplicationOfferArg
 			}
 		}
 		ops := []txn.Op{
-			model.assertActiveOp(),
+			assertActiveOp,
 			{
 				C:      applicationOffersC,
 				Id:     doc.DocID,
@@ -200,7 +222,7 @@ func (s *applicationOffers) AddOffer(offerArgs crossmodel.AddApplicationOfferArg
 		}
 		return ops, nil
 	}
-	err = s.st.run(buildTxn)
+	err = s.st.db().Run(buildTxn)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -208,16 +230,33 @@ func (s *applicationOffers) AddOffer(offerArgs crossmodel.AddApplicationOfferArg
 	// Ensure the owner has admin access to the offer.
 	offerTag := names.NewApplicationOfferTag(doc.OfferName)
 	owner := names.NewUserTag(offerArgs.Owner)
-	err = s.st.CreateOfferAccess(offerTag, owner, permission.AdminAccess)
-	if err != nil {
-		return nil, errors.Annotate(err, "granting admin permission to the offer owner")
-	}
-	// Add in any read access permissions.
-	for _, user := range offerArgs.HasRead {
-		readerTag := names.NewUserTag(user)
-		err = s.st.CreateOfferAccess(offerTag, readerTag, permission.ReadAccess)
+
+	switch st := s.st.(type) {
+	case *CAASState:
+		err = st.CreateOfferAccess(offerTag, owner, permission.AdminAccess)
 		if err != nil {
-			return nil, errors.Annotatef(err, "granting read permission to %q", user)
+			return nil, errors.Annotate(err, "granting admin permission to the offer owner")
+		}
+		// Add in any read access permissions.
+		for _, user := range offerArgs.HasRead {
+			readerTag := names.NewUserTag(user)
+			err = st.CreateOfferAccess(offerTag, readerTag, permission.ReadAccess)
+			if err != nil {
+				return nil, errors.Annotatef(err, "granting read permission to %q", user)
+			}
+		}
+	case *State:
+		err = st.CreateOfferAccess(offerTag, owner, permission.AdminAccess)
+		if err != nil {
+			return nil, errors.Annotate(err, "granting admin permission to the offer owner")
+		}
+		// Add in any read access permissions.
+		for _, user := range offerArgs.HasRead {
+			readerTag := names.NewUserTag(user)
+			err = st.CreateOfferAccess(offerTag, readerTag, permission.ReadAccess)
+			if err != nil {
+				return nil, errors.Annotatef(err, "granting read permission to %q", user)
+			}
 		}
 	}
 	return result, nil
@@ -230,11 +269,27 @@ func (s *applicationOffers) UpdateOffer(offerArgs crossmodel.AddApplicationOffer
 	if err := s.validateOfferArgs(offerArgs); err != nil {
 		return nil, err
 	}
-	model, err := s.st.Model()
-	if err != nil {
-		return nil, errors.Trace(err)
-	} else if model.Life() != Alive {
-		return nil, errors.Errorf("model is no longer alive")
+
+	var assertActiveOp txn.Op
+	switch st := s.st.(type) {
+	case *CAASState:
+		model, err := st.CAASModel()
+		if err != nil {
+			return nil, errors.Trace(err)
+		} else if model.Life() != Alive {
+			return nil, errors.Errorf("model is no longer alive")
+		}
+		assertActiveOp = model.assertActiveOp()
+	case *State:
+		model, err := st.Model()
+		if err != nil {
+			return nil, errors.Trace(err)
+		} else if model.Life() != Alive {
+			return nil, errors.Errorf("model is no longer alive")
+		}
+		assertActiveOp = model.assertActiveOp()
+	default:
+		return nil, errors.Errorf("unknown state type %T", st)
 	}
 
 	offer, err := s.offerForName(offerArgs.OfferName)
@@ -259,7 +314,7 @@ func (s *applicationOffers) UpdateOffer(offerArgs crossmodel.AddApplicationOffer
 			}
 		}
 		ops := []txn.Op{
-			model.assertActiveOp(),
+			assertActiveOp,
 			{
 				C:      applicationOffersC,
 				Id:     doc.DocID,
@@ -269,14 +324,14 @@ func (s *applicationOffers) UpdateOffer(offerArgs crossmodel.AddApplicationOffer
 		}
 		return ops, nil
 	}
-	err = s.st.run(buildTxn)
+	err = s.st.db().Run(buildTxn)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	return s.makeApplicationOffer(doc)
 }
 
-func (s *applicationOffers) makeApplicationOfferDoc(st *State, uuid string, offer crossmodel.AddApplicationOfferArgs) applicationOfferDoc {
+func (s *applicationOffers) makeApplicationOfferDoc(st modelBackend, uuid string, offer crossmodel.AddApplicationOfferArgs) applicationOfferDoc {
 	doc := applicationOfferDoc{
 		DocID:                  st.docID(offer.OfferName),
 		OfferUUID:              uuid,
@@ -347,16 +402,44 @@ func (s *applicationOffers) makeApplicationOffer(doc applicationOfferDoc) (*cros
 		ApplicationName:        doc.ApplicationName,
 		ApplicationDescription: doc.ApplicationDescription,
 	}
-	app, err := s.st.Application(doc.ApplicationName)
-	if err != nil {
-		return nil, errors.Trace(err)
+	switch st := s.st.(type) {
+	case *CAASState:
+		app, err := st.CAASApplication(doc.ApplicationName)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		eps, err := getCAASApplicationEndpoints(app, doc.Endpoints)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		offer.Endpoints = eps
+	case *State:
+		app, err := st.Application(doc.ApplicationName)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		eps, err := getApplicationEndpoints(app, doc.Endpoints)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		offer.Endpoints = eps
+	default:
+		return nil, errors.Errorf("unknown state type %T", s.st)
 	}
-	eps, err := getApplicationEndpoints(app, doc.Endpoints)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	offer.Endpoints = eps
+
 	return offer, nil
+}
+
+func getCAASApplicationEndpoints(caasApp *CAASApplication, endpointNames map[string]string) (map[string]charm.Relation, error) {
+	result := make(map[string]charm.Relation)
+	for alias, endpointName := range endpointNames {
+		endpoint, err := caasApp.Endpoint(endpointName)
+		if err != nil {
+			return nil, errors.Annotatef(err, "getting relation endpoint for relation %q and application %q", endpointName, caasApp.Name())
+		}
+		result[alias] = endpoint.Relation
+	}
+	return result, nil
 }
 
 func getApplicationEndpoints(application *Application, endpointNames map[string]string) (map[string]charm.Relation, error) {

@@ -12,13 +12,6 @@ import (
 	"github.com/juju/juju/status"
 )
 
-// StatePool provides the subset of a state pool required by the
-// remote relations facade.
-type StatePool interface {
-	// Get returns a State for a given model from the pool.
-	Get(modelUUID string) (RemoteRelationsState, func(), error)
-}
-
 // RemoteRelationState provides the subset of global state required by the
 // remote relations facade.
 type RemoteRelationsState interface {
@@ -189,16 +182,119 @@ type Application interface {
 	Endpoints() ([]state.Endpoint, error)
 }
 
-type statePoolShim struct {
-	*state.StatePool
+type caasStateShim struct {
+	*state.CAASState
 }
 
-func (pool statePoolShim) Get(modelUUID string) (RemoteRelationsState, func(), error) {
-	st, closer, err := pool.StatePool.Get(modelUUID)
+func (st caasStateShim) ListOffers(filter ...crossmodel.ApplicationOfferFilter) ([]crossmodel.ApplicationOffer, error) {
+	oa := state.NewCAASApplicationOffers(st.CAASState)
+	return oa.ListOffers(filter...)
+}
+
+func (st caasStateShim) ExportLocalEntity(entity names.Tag) (string, error) {
+	r := st.CAASState.RemoteEntities()
+	return r.ExportLocalEntity(entity)
+}
+
+func (st caasStateShim) GetRemoteEntity(model names.ModelTag, token string) (names.Tag, error) {
+	r := st.CAASState.RemoteEntities()
+	return r.GetRemoteEntity(model, token)
+}
+
+func (st caasStateShim) ImportRemoteEntity(model names.ModelTag, entity names.Tag, token string) error {
+	r := st.CAASState.RemoteEntities()
+	return r.ImportRemoteEntity(model, entity, token)
+}
+
+func (st caasStateShim) RemoveRemoteEntity(model names.ModelTag, entity names.Tag) error {
+	r := st.CAASState.RemoteEntities()
+	return r.RemoveRemoteEntity(model, entity)
+}
+
+func (st caasStateShim) GetToken(model names.ModelTag, entity names.Tag) (string, error) {
+	r := st.CAASState.RemoteEntities()
+	return r.GetToken(model, entity)
+}
+
+func (st caasStateShim) KeyRelation(key string) (Relation, error) {
+	r, err := st.CAASState.KeyRelation(key)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
-	return stateShim{st}, closer, nil
+	return caasRelationShim{r, st.CAASState}, nil
+}
+
+func (st caasStateShim) Relation(id int) (Relation, error) {
+	r, err := st.CAASState.Relation(id)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return caasRelationShim{r, st.CAASState}, nil
+}
+
+func (st caasStateShim) AddRelation(eps ...state.Endpoint) (Relation, error) {
+	r, err := st.CAASState.AddRelation(eps...)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return caasRelationShim{r, st.CAASState}, nil
+}
+
+func (st caasStateShim) EndpointsRelation(eps ...state.Endpoint) (Relation, error) {
+	r, err := st.CAASState.EndpointsRelation(eps...)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return caasRelationShim{r, st.CAASState}, nil
+}
+
+func (st caasStateShim) RemoteApplication(name string) (RemoteApplication, error) {
+	a, err := st.CAASState.RemoteApplication(name)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return &remoteApplicationShim{a}, nil
+}
+
+func (st caasStateShim) AddRemoteApplication(args state.AddRemoteApplicationParams) (RemoteApplication, error) {
+	a, err := st.CAASState.AddRemoteApplication(args)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return remoteApplicationShim{a}, nil
+}
+
+func (st caasStateShim) WatchRemoteApplicationRelations(applicationName string) (state.StringsWatcher, error) {
+	a, err := st.CAASState.RemoteApplication(applicationName)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return a.WatchRelations(), nil
+}
+
+type caasRelationShim struct {
+	*state.Relation
+	st *state.CAASState
+}
+
+func (r caasRelationShim) RemoteUnit(unitId string) (RelationUnit, error) {
+	ru, err := r.Relation.RemoteUnit(unitId)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return relationUnitShim{ru}, nil
+}
+
+func (r caasRelationShim) Unit(unitId string) (RelationUnit, error) {
+	unit, err := r.st.CAASUnit(unitId)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	ru, err := r.Relation.CAASUnit(unit)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return relationUnitShim{ru}, nil
 }
 
 type stateShim struct {
@@ -346,6 +442,18 @@ func (r relationUnitShim) Settings() (map[string]interface{}, error) {
 
 type remoteApplicationShim struct {
 	*state.RemoteApplication
+}
+
+type caasApplicationShim struct {
+	*state.CAASApplication
+}
+
+func (st caasStateShim) Application(name string) (Application, error) {
+	a, err := st.CAASState.CAASApplication(name)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return caasApplicationShim{a}, nil
 }
 
 type applicationShim struct {

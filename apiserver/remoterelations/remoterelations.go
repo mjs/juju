@@ -25,7 +25,6 @@ var logger = loggo.GetLogger("juju.apiserver.remoterelations")
 // RemoteRelationsAPI provides access to the Provisioner API facade.
 type RemoteRelationsAPI struct {
 	st         RemoteRelationsState
-	pool       StatePool
 	resources  facade.Resources
 	authorizer facade.Authorizer
 }
@@ -33,13 +32,18 @@ type RemoteRelationsAPI struct {
 // NewRemoteRelationsAPI creates a new server-side RemoteRelationsAPI facade
 // backed by global state.
 func NewStateRemoteRelationsAPI(ctx facade.Context) (*RemoteRelationsAPI, error) {
-	return NewRemoteRelationsAPI(stateShim{ctx.State()}, statePoolShim{ctx.StatePool()}, ctx.Resources(), ctx.Auth())
+	var st RemoteRelationsState
+	if ctx.IsCAAS() {
+		st = caasStateShim{ctx.CAASState()}
+	} else {
+		st = stateShim{ctx.State()}
+	}
+	return NewRemoteRelationsAPI(st, ctx.Resources(), ctx.Auth())
 }
 
 // NewRemoteRelationsAPI returns a new server-side RemoteRelationsAPI facade.
 func NewRemoteRelationsAPI(
 	st RemoteRelationsState,
-	pool StatePool,
 	resources facade.Resources,
 	authorizer facade.Authorizer,
 ) (*RemoteRelationsAPI, error) {
@@ -48,7 +52,6 @@ func NewRemoteRelationsAPI(
 	}
 	return &RemoteRelationsAPI{
 		st:         st,
-		pool:       pool,
 		resources:  resources,
 		authorizer: authorizer,
 	}, nil

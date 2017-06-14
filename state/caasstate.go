@@ -686,6 +686,10 @@ func (st *CAASState) KeyRelation(key string) (*Relation, error) {
 	return keyRelation(st, key)
 }
 
+func (st *CAASState) Relation(id int) (*Relation, error) {
+	return relation(st, id)
+}
+
 // AllRelations returns all relations in the model ordered by id.
 func (st *CAASState) AllRelations() (relations []*Relation, err error) {
 	return allRelations(st)
