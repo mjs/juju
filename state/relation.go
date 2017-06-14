@@ -401,6 +401,13 @@ func (r *Relation) Unit(u *Unit) (*RelationUnit, error) {
 	return r.unit(u.Name(), u.doc.Principal, u.IsPrincipal(), checkUnitLife)
 }
 
+// XXX CAAS: since r.unit() just takes the unit name, we should have one function
+// here that takes some interface that covers both Unit and CAASUnit
+func (r *Relation) CAASUnit(u *CAASUnit) (*RelationUnit, error) {
+	const checkUnitLife = true
+	return r.unit(u.Name(), "", true, checkUnitLife)
+}
+
 // RemoteUnit returns a RelationUnit for the supplied unit
 // of a remote application.
 func (r *Relation) RemoteUnit(unitName string) (*RelationUnit, error) {

@@ -5,6 +5,8 @@
 package caasoperator
 
 import (
+	"fmt"
+
 	"github.com/juju/errors"
 	"github.com/juju/loggo"
 	"gopkg.in/juju/charm.v6-unstable"
@@ -14,6 +16,7 @@ import (
 	"github.com/juju/juju/apiserver/facade"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/state"
+	"github.com/juju/juju/state/multiwatcher"
 	"github.com/juju/juju/state/watcher"
 )
 
@@ -547,19 +550,15 @@ func (f *Facade) getOneAppUnits(tag names.ApplicationTag) (params.CAASUnits, err
 	return out, nil
 }
 
-/*
-
 // WatchApplicationRelations returns a StringsWatcher, for each given
-// service, that notifies of changes to the lifecycles of relations
-// involving that service.
+// application, that notifies of changes to the lifecycles of relations
+// involving that application
 func (f *Facade) WatchApplicationRelations(args params.Entities) (params.StringsWatchResults, error) {
 	result := params.StringsWatchResults{
 		Results: make([]params.StringsWatchResult, len(args.Entities)),
 	}
-	canAccess, err := f.accessService()
-	if err != nil {
-		return params.StringsWatchResults{}, err
-	}
+	canAccess := accessAll // XXX CAAS access checks
+
 	for i, entity := range args.Entities {
 		tag, err := names.ParseApplicationTag(entity.Tag)
 		if err != nil {
@@ -568,7 +567,7 @@ func (f *Facade) WatchApplicationRelations(args params.Entities) (params.Strings
 		}
 		err = common.ErrPerm
 		if canAccess(tag) {
-			result.Results[i], err = f.watchOneServiceRelations(tag)
+			result.Results[i], err = f.watchOneApplicationRelations(tag)
 		}
 		result.Results[i].Error = common.ServerError(err)
 	}
@@ -581,10 +580,7 @@ func (f *Facade) Relation(args params.RelationUnits) (params.RelationResults, er
 	result := params.RelationResults{
 		Results: make([]params.RelationResult, len(args.RelationUnits)),
 	}
-	canAccess, err := f.accessUnit()
-	if err != nil {
-		return params.RelationResults{}, err
-	}
+	canAccess := accessAll // XXX CAAS access checks
 	for i, rel := range args.RelationUnits {
 		relParams, err := f.getOneRelation(canAccess, rel.Relation, rel.Unit)
 		if err == nil {
@@ -622,10 +618,7 @@ func (f *Facade) JoinedRelations(args params.Entities) (params.StringsResults, e
 	if len(args.Entities) == 0 {
 		return result, nil
 	}
-	canRead, err := f.accessUnit()
-	if err != nil {
-		return params.StringsResults{}, err
-	}
+	canRead := accessAll // XXX CAAS access checks
 	for i, entity := range args.Entities {
 		tag, err := names.ParseUnitTag(entity.Tag)
 		if err != nil {
@@ -634,8 +627,7 @@ func (f *Facade) JoinedRelations(args params.Entities) (params.StringsResults, e
 		}
 		err = common.ErrPerm
 		if canRead(tag) {
-			var unit *state.Unit
-			unit, err = f.getUnit(tag)
+			unit, err := f.getCAASUnit(tag)
 			if err == nil {
 				result.Results[i].Result, err = relationsInScopeTags(unit)
 			}
@@ -653,16 +645,14 @@ func (f *Facade) EnterScope(args params.RelationUnits) (params.ErrorResults, err
 	result := params.ErrorResults{
 		Results: make([]params.ErrorResult, len(args.RelationUnits)),
 	}
-	canAccess, err := f.accessUnit()
-	if err != nil {
-		return params.ErrorResults{}, err
-	}
+	canAccess := accessAll // XXX CAAS access checks
+
 	one := func(relTag string, unitTag names.UnitTag) error {
 		rel, unit, err := f.getRelationAndUnit(canAccess, relTag, unitTag)
 		if err != nil {
 			return err
 		}
-		relUnit, err := rel.Unit(unit)
+		relUnit, err := rel.CAASUnit(unit)
 		if err != nil {
 			return err
 		}
@@ -701,10 +691,7 @@ func (f *Facade) LeaveScope(args params.RelationUnits) (params.ErrorResults, err
 	result := params.ErrorResults{
 		Results: make([]params.ErrorResult, len(args.RelationUnits)),
 	}
-	canAccess, err := f.accessUnit()
-	if err != nil {
-		return params.ErrorResults{}, err
-	}
+	canAccess := accessAll // XXX CAAS access checks
 	for i, arg := range args.RelationUnits {
 		unit, err := names.ParseUnitTag(arg.Unit)
 		if err != nil {
@@ -726,10 +713,8 @@ func (f *Facade) ReadSettings(args params.RelationUnits) (params.SettingsResults
 	result := params.SettingsResults{
 		Results: make([]params.SettingsResult, len(args.RelationUnits)),
 	}
-	canAccess, err := f.accessUnit()
-	if err != nil {
-		return params.SettingsResults{}, err
-	}
+	canAccess := accessAll // XXX CAAS access checks
+
 	for i, arg := range args.RelationUnits {
 		unit, err := names.ParseUnitTag(arg.Unit)
 		if err != nil {
@@ -755,10 +740,8 @@ func (f *Facade) ReadRemoteSettings(args params.RelationUnitPairs) (params.Setti
 	result := params.SettingsResults{
 		Results: make([]params.SettingsResult, len(args.RelationUnitPairs)),
 	}
-	canAccess, err := f.accessUnit()
-	if err != nil {
-		return params.SettingsResults{}, err
-	}
+	canAccess := accessAll // XXX CAAS access checks
+
 	for i, arg := range args.RelationUnitPairs {
 		unit, err := names.ParseUnitTag(arg.LocalUnit)
 		if err != nil {
@@ -790,10 +773,7 @@ func (f *Facade) UpdateSettings(args params.RelationUnitsSettings) (params.Error
 	result := params.ErrorResults{
 		Results: make([]params.ErrorResult, len(args.RelationUnits)),
 	}
-	canAccess, err := f.accessUnit()
-	if err != nil {
-		return params.ErrorResults{}, err
-	}
+	canAccess := accessAll // XXX CAAS access checks
 	for i, arg := range args.RelationUnits {
 		unit, err := names.ParseUnitTag(arg.Unit)
 		if err != nil {
@@ -827,10 +807,7 @@ func (f *Facade) WatchRelationUnits(args params.RelationUnits) (params.RelationU
 	result := params.RelationUnitsWatchResults{
 		Results: make([]params.RelationUnitsWatchResult, len(args.RelationUnits)),
 	}
-	canAccess, err := f.accessUnit()
-	if err != nil {
-		return params.RelationUnitsWatchResults{}, err
-	}
+	canAccess := accessAll // XXX CAAS access checks
 	for i, arg := range args.RelationUnits {
 		unit, err := names.ParseUnitTag(arg.Unit)
 		if err != nil {
@@ -846,31 +823,32 @@ func (f *Facade) WatchRelationUnits(args params.RelationUnits) (params.RelationU
 	return result, nil
 }
 
-// WatchUnitAddresses returns a NotifyWatcher for observing changes
-// to each unit's addresses.
-func (f *Facade) WatchUnitAddresses(args params.Entities) (params.NotifyWatchResults, error) {
-	result := params.NotifyWatchResults{
-		Results: make([]params.NotifyWatchResult, len(args.Entities)),
-	}
-	canAccess, err := f.accessUnit()
-	if err != nil {
-		return params.NotifyWatchResults{}, err
-	}
-	for i, entity := range args.Entities {
-		unit, err := names.ParseUnitTag(entity.Tag)
-		if err != nil {
-			result.Results[i].Error = common.ServerError(common.ErrPerm)
-			continue
-		}
-		err = common.ErrPerm
-		watcherId := ""
-		if canAccess(unit) {
-			watcherId, err = f.watchOneUnitAddresses(unit)
-		}
-		result.Results[i].NotifyWatcherId = watcherId
-		result.Results[i].Error = common.ServerError(err)
-	}
-	return result, nil
+// // WatchUnitAddresses returns a NotifyWatcher for observing changes
+// // to each unit's addresses.
+// func (f *Facade) WatchUnitAddresses(args params.Entities) (params.NotifyWatchResults, error) {
+// 	result := params.NotifyWatchResults{
+// 		Results: make([]params.NotifyWatchResult, len(args.Entities)),
+// 	}
+// 	canAccess := accessAll // XXX CAAS access checks
+// 	for i, entity := range args.Entities {
+// 		unit, err := names.ParseUnitTag(entity.Tag)
+// 		if err != nil {
+// 			result.Results[i].Error = common.ServerError(common.ErrPerm)
+// 			continue
+// 		}
+// 		err = common.ErrPerm
+// 		watcherId := ""
+// 		if canAccess(unit) {
+// 			watcherId, err = f.watchOneUnitAddresses(unit)
+// 		}
+// 		result.Results[i].NotifyWatcherId = watcherId
+// 		result.Results[i].Error = common.ServerError(err)
+// 	}
+// 	return result, nil
+// }
+
+func (f *Facade) getCAASUnit(tag names.UnitTag) (*state.CAASUnit, error) {
+	return f.st.CAASUnit(tag.Id())
 }
 
 func (f *Facade) getRelationUnit(canAccess common.AuthFunc, relTag string, unitTag names.UnitTag) (*state.RelationUnit, error) {
@@ -878,7 +856,7 @@ func (f *Facade) getRelationUnit(canAccess common.AuthFunc, relTag string, unitT
 	if err != nil {
 		return nil, err
 	}
-	return rel.Unit(unit)
+	return rel.CAASUnit(unit)
 }
 
 func (f *Facade) getOneRelationById(relId int) (params.RelationResult, error) {
@@ -901,7 +879,7 @@ func (f *Facade) getOneRelationById(relId int) (params.RelationResult, error) {
 		return nothing, err
 	}
 	// Use the currently authenticated unit to get the endpoint.
-	result, err := f.prepareRelationResult(rel, unit.(*state.Unit))
+	result, err := f.prepareRelationResult(rel, unit.(*state.CAASUnit))
 	if err != nil {
 		// An error from prepareRelationResult means the authenticated
 		// unit's service is not part of the requested
@@ -912,7 +890,7 @@ func (f *Facade) getOneRelationById(relId int) (params.RelationResult, error) {
 	return result, nil
 }
 
-func (f *Facade) getRelationAndUnit(canAccess common.AuthFunc, relTag string, unitTag names.UnitTag) (*state.Relation, *state.Unit, error) {
+func (f *Facade) getRelationAndUnit(canAccess common.AuthFunc, relTag string, unitTag names.UnitTag) (*state.Relation, *state.CAASUnit, error) {
 	tag, err := names.ParseRelationTag(relTag)
 	if err != nil {
 		return nil, nil, common.ErrPerm
@@ -926,11 +904,11 @@ func (f *Facade) getRelationAndUnit(canAccess common.AuthFunc, relTag string, un
 	if !canAccess(unitTag) {
 		return nil, nil, common.ErrPerm
 	}
-	unit, err := f.getUnit(unitTag)
+	unit, err := f.getCAASUnit(unitTag)
 	return rel, unit, err
 }
 
-func (f *Facade) prepareRelationResult(rel *state.Relation, unit *state.Unit) (params.RelationResult, error) {
+func (f *Facade) prepareRelationResult(rel *state.Relation, unit *state.CAASUnit) (params.RelationResult, error) {
 	nothing := params.RelationResult{}
 	ep, err := rel.Endpoint(unit.ApplicationName())
 	if err != nil {
@@ -962,13 +940,13 @@ func (f *Facade) getOneRelation(canAccess common.AuthFunc, relTag, unitTag strin
 	return f.prepareRelationResult(rel, unit)
 }
 
-func (f *Facade) watchOneServiceRelations(tag names.ApplicationTag) (params.StringsWatchResult, error) {
+func (f *Facade) watchOneApplicationRelations(tag names.ApplicationTag) (params.StringsWatchResult, error) {
 	nothing := params.StringsWatchResult{}
-	service, err := f.st.Application(tag.Id())
+	application, err := f.st.CAASApplication(tag.Id())
 	if err != nil {
 		return nothing, err
 	}
-	watch := service.WatchRelations()
+	watch := application.WatchRelations()
 	// Consume the initial event and forward it to the result.
 	if changes, ok := <-watch.Changes(); ok {
 		return params.StringsWatchResult{
@@ -979,29 +957,21 @@ func (f *Facade) watchOneServiceRelations(tag names.ApplicationTag) (params.Stri
 	return nothing, watcher.EnsureErr(watch)
 }
 
-func (f *Facade) watchOneUnitAddresses(tag names.UnitTag) (string, error) {
-	unit, err := f.getUnit(tag)
-	if err != nil {
-		return "", err
-	}
-	machineId, err := unit.AssignedMachineId()
-	if err != nil {
-		return "", err
-	}
-	machine, err := f.st.Machine(machineId)
-	if err != nil {
-		return "", err
-	}
-	watch := machine.WatchAddresses()
-	// Consume the initial event. Technically, API
-	// calls to Watch 'transmit' the initial event
-	// in the Watch response. But NotifyWatchers
-	// have no state to transmit.
-	if _, ok := <-watch.Changes(); ok {
-		return f.resources.Register(watch), nil
-	}
-	return "", watcher.EnsureErr(watch)
-}
+// func (f *Facade) watchOneUnitAddresses(tag names.UnitTag) (string, error) {
+// 	unit, err := f.getCAASUnit(tag)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	watch := unit.WatchAddresses()
+// 	// Consume the initial event. Technically, API
+// 	// calls to Watch 'transmit' the initial event
+// 	// in the Watch response. But NotifyWatchers
+// 	// have no state to transmit.
+// 	if _, ok := <-watch.Changes(); ok {
+// 		return f.resources.Register(watch), nil
+// 	}
+// 	return "", watcher.EnsureErr(watch)
+// }
 
 func (f *Facade) watchOneRelationUnit(relUnit *state.RelationUnit) (params.RelationUnitsWatchResult, error) {
 	watch := relUnit.Watch()
@@ -1054,7 +1024,7 @@ func convertRelationSettings(settings map[string]interface{}) (params.Settings, 
 	return result, nil
 }
 
-func relationsInScopeTags(unit *state.Unit) ([]string, error) {
+func relationsInScopeTags(unit *state.CAASUnit) ([]string, error) {
 	relations, err := unit.RelationsInScope()
 	if err != nil {
 		return nil, err
@@ -1066,6 +1036,7 @@ func relationsInScopeTags(unit *state.Unit) ([]string, error) {
 	return tags, nil
 }
 
+/*
 func leadershipSettingsAccessorFactory(
 	st *state.State,
 	resources facade.Resources,

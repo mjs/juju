@@ -392,6 +392,10 @@ func (a *Application) WatchRelations() StringsWatcher {
 	return watchApplicationRelations(a.st, a.doc.Name)
 }
 
+func (a *CAASApplication) WatchRelations() StringsWatcher {
+	return watchApplicationRelations(a.st, a.doc.Name)
+}
+
 // WatchRelations returns a StringsWatcher that notifies of changes to the
 // lifecycles of relations involving s.
 func (s *RemoteApplication) WatchRelations() StringsWatcher {
