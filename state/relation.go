@@ -411,8 +411,9 @@ func (r *Relation) RemoteUnit(unitName string) (*RelationUnit, error) {
 	}
 	switch st := r.st.(type) {
 	case *CAASState:
-		// XXX CAAS
-		return nil, errors.New("unsupported")
+		if _, err := st.RemoteApplication(serviceName); err != nil {
+			return nil, errors.Trace(err)
+		}
 	case *State:
 		if _, err := st.RemoteApplication(serviceName); err != nil {
 			return nil, errors.Trace(err)
@@ -437,8 +438,12 @@ func (r *Relation) IsCrossModel() (bool, error) {
 	for _, ep := range r.Endpoints() {
 		switch st := r.st.(type) {
 		case *CAASState:
-			// XXX CAAS
-			return false, errors.New("unsupported")
+			_, err := st.RemoteApplication(ep.ApplicationName)
+			if err == nil {
+				return true, nil
+			} else if !errors.IsNotFound(err) {
+				return false, errors.Trace(err)
+			}
 		case *State:
 			_, err := st.RemoteApplication(ep.ApplicationName)
 			if err == nil {
