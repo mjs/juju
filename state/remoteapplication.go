@@ -155,13 +155,16 @@ func (s *RemoteApplication) URL() (string, bool) {
 // Token returns the token for the remote application, provided by the remote
 // model to identify the service in future communications.
 func (s *RemoteApplication) Token() (string, error) {
-	st, ok := s.st.(*State)
-	if !ok {
-		// XXX CAAS
-		return "", errors.New("unsupported")
+	switch st := s.st.(type) {
+	case *CAASState:
+		r := st.RemoteEntities()
+		return r.GetToken(s.SourceModel(), s.Tag())
+	case *State:
+		r := st.RemoteEntities()
+		return r.GetToken(s.SourceModel(), s.Tag())
+	default:
+		return "", errors.Errorf("unknown state type %T", s.st)
 	}
-	r := st.RemoteEntities()
-	return r.GetToken(s.SourceModel(), s.Tag())
 }
 
 // Tag returns a name identifying the application.
