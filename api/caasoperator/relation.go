@@ -89,7 +89,7 @@ func (r *Relation) Endpoint() (*Endpoint, error) {
 }
 
 // Unit returns a RelationUnit for the supplied unit.
-func (r *Relation) Unit(u *CAASUnit) (*RelationUnit, error) {
+func (r *Relation) CAASUnit(u *CAASUnit) (*RelationUnit, error) {
 	if u == nil {
 		return nil, fmt.Errorf("unit is nil")
 	}
