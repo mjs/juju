@@ -694,8 +694,3 @@ func (st *CAASState) Relation(id int) (*Relation, error) {
 func (st *CAASState) AllRelations() (relations []*Relation, err error) {
 	return allRelations(st)
 }
-
-// Relation returns the existing relation with the given id.
-func (st *CAASState) Relation(id int) (*Relation, error) {
-	return relation(st, id)
-}
