@@ -10,7 +10,7 @@ import (
 	corecharm "gopkg.in/juju/charm.v6-unstable"
 	"gopkg.in/juju/charm.v6-unstable/hooks"
 	"gopkg.in/juju/names.v2"
-	worker "gopkg.in/juju/worker.v1"
+	//	worker "gopkg.in/juju/worker.v1"
 
 	"github.com/juju/juju/api/caasoperator"
 	"github.com/juju/juju/apiserver/params"
@@ -104,10 +104,12 @@ func NewRelations(st *caasoperator.State, tag names.UnitTag, charmDir, relations
 // the corresponding relations. It's only expected to be called while a
 // *relations is being created.
 func (r *relations) init() error {
+	logger.Debugf("in relations.init()")
 	joinedRelationTags, err := r.caasUnit.JoinedRelations()
 	if err != nil {
 		return errors.Trace(err)
 	}
+	logger.Debugf("relations.init(), got joinedRelationTags = %v", joinedRelationTags)
 	joinedRelations := make(map[int]*caasoperator.Relation)
 	for _, tag := range joinedRelationTags {
 		relation, err := r.st.Relation(tag)
@@ -116,10 +118,13 @@ func (r *relations) init() error {
 		}
 		joinedRelations[relation.Id()] = relation
 	}
+	logger.Debugf("relations.init(), got joinedRelations = %v", joinedRelations)
 	knownDirs, err := ReadAllStateDirs(r.relationsDir)
 	if err != nil {
 		return errors.Trace(err)
 	}
+
+	logger.Debugf("relations.init(), got knownDirs = %v", knownDirs)
 	for id, dir := range knownDirs {
 		if rel, ok := joinedRelations[id]; ok {
 			if err := r.add(rel, dir); err != nil {
@@ -390,7 +395,7 @@ func (r *relations) update(remote map[int]remotestate.RelationSnapshot) error {
 // operation succeeds or fails; or until the abort chan is closed, in
 // which case it will return resolver.ErrLoopAborted.
 func (r *relations) add(rel *caasoperator.Relation, dir *StateDir) (err error) {
-	logger.Infof("joining relation %q, storing state in %v", rel, dir)
+	logger.Infof("relations.add(): %q, storing state in %v", rel, dir)
 	ru, err := rel.CAASUnit(r.caasUnit)
 	if err != nil {
 		return errors.Trace(err)

@@ -168,7 +168,7 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 	if err := w.setUp(caasApplicationTag); err != nil {
 		return errors.Trace(err)
 	}
-
+	logger.Debugf("remotestatewatcher setup correctly.")
 	var requiredEvents int
 
 	var seenApplicationChange bool
@@ -180,6 +180,7 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 		return errors.Trace(err)
 	}
 	requiredEvents++
+	logger.Debugf("app.watch created.")
 
 	var seenUnitsChange bool
 	unitsw, err := w.app.WatchUnits()
@@ -190,7 +191,7 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 		return errors.Trace(err)
 	}
 	requiredEvents++
-
+	logger.Debugf("watchunits created.")
 	// var seenConfigChange bool
 	// configw, err := w.unit.WatchConfigSettings()
 	// if err != nil {
@@ -210,6 +211,7 @@ func (w *RemoteStateWatcher) loop(caasApplicationTag names.ApplicationTag) (err 
 		return errors.Trace(err)
 	}
 	requiredEvents++
+	logger.Debugf("relationsw created.")
 
 	// var seenAddressesChange bool
 	// addressesw, err := w.unit.WatchAddresses()
@@ -440,6 +442,8 @@ func (w *RemoteStateWatcher) addressesChanged() error {
 func (w *RemoteStateWatcher) relationsChanged(keys []string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	logger.Debugf("in RemoteStateWatcher.relationsChanged, keys = %v", keys)
+
 	for _, key := range keys {
 		relationTag := names.NewRelationTag(key)
 		rel, err := w.st.Relation(relationTag)

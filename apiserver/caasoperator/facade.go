@@ -608,7 +608,7 @@ func (f *Facade) RelationById(args params.RelationIds) (params.RelationResults, 
 	return result, nil
 }
 
-// JoinedRelations returns the tags of all relations for which each supplied unit
+// JoinedRelations returns the tags of all relations for which each supplied application
 // has entered scope. It should be called RelationsInScope, but it's not convenient
 // to make that change until we have versioned APIs.
 func (f *Facade) JoinedRelations(args params.Entities) (params.StringsResults, error) {
@@ -636,7 +636,6 @@ func (f *Facade) JoinedRelations(args params.Entities) (params.StringsResults, e
 	}
 	return result, nil
 }
-
 
 // EnterScope ensures each unit has entered its scope in the relation,
 // for all of the given relation/unit pairs. See also

@@ -413,7 +413,7 @@ func watchApplicationRelations(backend modelBackend, applicationName string) Str
 		out := strings.HasPrefix(k, prefix) || strings.Contains(k, infix)
 		return out
 	}
-
+	logger.Debugf("starting lifecycle watcher for relations with applicationName: %v", applicationName)
 	members := bson.D{{"endpoints.applicationname", applicationName}}
 	return newLifecycleWatcher(backend, relationsC, members, filter, nil)
 }

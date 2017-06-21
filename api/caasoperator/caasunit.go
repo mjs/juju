@@ -498,34 +498,6 @@ func (op *CAASUnit) RequestReboot() error {
 	return nil
 }
 
-// JoinedRelations returns the tags of the relations the caasunit has joined.
-func (op *CAASUnit) JoinedRelations() ([]names.RelationTag, error) {
-	var results params.StringsResults
-	args := params.Entities{
-		Entities: []params.Entity{{Tag: op.tag.String()}},
-	}
-	err := op.st.facade.FacadeCall("JoinedRelations", args, &results)
-	if err != nil {
-		return nil, err
-	}
-	if len(results.Results) != 1 {
-		return nil, fmt.Errorf("expected 1 result, got %d", len(results.Results))
-	}
-	result := results.Results[0]
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	var relTags []names.RelationTag
-	for _, rel := range result.Result {
-		tag, err := names.ParseRelationTag(rel)
-		if err != nil {
-			return nil, err
-		}
-		relTags = append(relTags, tag)
-	}
-	return relTags, nil
-}
-
 // MeterStatus returns the meter status of the caasunit.
 func (op *CAASUnit) MeterStatus() (statusCode, statusInfo string, rErr error) {
 	var results params.MeterStatusResults
@@ -566,4 +538,32 @@ func (op *CAASUnit) WatchMeterStatus() (watcher.NotifyWatcher, error) {
 	}
 	w := apiwatcher.NewNotifyWatcher(op.st.facade.RawAPICaller(), result)
 	return w, nil
+}
+
+// JoinedRelations returns the tags of the relations the application's units have joined.
+func (u *CAASUnit) JoinedRelations() ([]names.RelationTag, error) {
+	var results params.StringsResults
+	args := params.Entities{
+		Entities: []params.Entity{{Tag: u.tag.String()}},
+	}
+	err := u.st.facade.FacadeCall("JoinedRelations", args, &results)
+	if err != nil {
+		return nil, err
+	}
+	if len(results.Results) != 1 {
+		return nil, fmt.Errorf("expected 1 result, got %d", len(results.Results))
+	}
+	result := results.Results[0]
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	var relTags []names.RelationTag
+	for _, rel := range result.Result {
+		tag, err := names.ParseRelationTag(rel)
+		if err != nil {
+			return nil, err
+		}
+		relTags = append(relTags, tag)
+	}
+	return relTags, nil
 }

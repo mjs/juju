@@ -57,7 +57,7 @@ type CaasOperator struct {
 	st              *caasoperator.State
 	paths           Paths
 	caasapplication *caasoperator.CAASApplication
-	caasunits       []*caasoperator.CAASUnit
+	caasunit        *caasoperator.CAASUnit
 	relations       relation.Relations
 	clock           clock.Clock
 
@@ -151,12 +151,12 @@ func NewCaasOperator(caasoperatorParams *CaasOperatorParams) (*CaasOperator, err
 	return op, errors.Trace(err)
 }
 
-func (op *CaasOperator) loop(caasoperatortag names.ApplicationTag) (err error) {
-	if err := op.init(caasoperatortag); err != nil {
+func (op *CaasOperator) loop(applicationTag names.ApplicationTag) (err error) {
+	if err := op.init(applicationTag); err != nil {
 		if err == jworker.ErrTerminateAgent {
 			return err
 		}
-		return errors.Annotatef(err, "failed to initialize caasoperator for %q", caasoperatortag)
+		return errors.Annotatef(err, "failed to initialize caasoperator for %q", applicationTag)
 	}
 
 	// Install is a special case, as it must run before there
@@ -210,6 +210,7 @@ func (op *CaasOperator) loop(caasoperatortag names.ApplicationTag) (err error) {
 		},
 		Clock: op.clock,
 	})
+
 	defer func() {
 		// Whenever we exit the caasoperator we want to stop a potentially
 		// running timer so it doesn't trigger for nothing.
@@ -228,7 +229,7 @@ func (op *CaasOperator) loop(caasoperatortag names.ApplicationTag) (err error) {
 		watcher, err = remotestate.NewWatcher(
 			remotestate.WatcherConfig{
 				State:               remotestate.NewAPIState(op.st),
-				ApplicationTag:      caasoperatortag,
+				ApplicationTag:      applicationTag,
 				UpdateStatusChannel: op.updateStatusAt,
 				CommandChannel:      op.commandChannel,
 				RetryHookChannel:    retryHookChan,
@@ -254,11 +255,12 @@ func (op *CaasOperator) loop(caasoperatortag names.ApplicationTag) (err error) {
 		return nil //setAgentStatus(op, status.Idle, "", nil)
 	}
 
-	// XXX TODO:clear resolved for each caasunit
 	clearResolved := func() error {
-		// if err := op.caasunit.ClearResolved(); err != nil {
-		// 	return errors.Trace(err)
-		// }
+		/* MMCC - need to know which unit to clear
+		if err := op.caasunit.ClearResolved(); err != nil {
+			return errors.Trace(err)
+		}
+		*/
 		watcher.ClearResolvedMode()
 		return nil
 	}
@@ -268,7 +270,6 @@ func (op *CaasOperator) loop(caasoperatortag names.ApplicationTag) (err error) {
 			err = errors.Annotate(err, "(re)starting watcher")
 			break
 		}
-
 		caasoperatorResolver := NewCaasOperatorResolver(ResolverConfig{
 			ClearResolved:       clearResolved,
 			ReportHookError:     op.reportHookError,
@@ -382,19 +383,24 @@ func (op *CaasOperator) init(caasapplicationtag names.ApplicationTag) (err error
 		return err
 	}
 
-	// XXX this doesn't work yet
-	// op.caasunits, err = op.caasapplication.AllCAASUnits()
-	// if err != nil {
-	// 	return err
-	// }
+	// MMCC TEMP: to test relations in the prototype, we hard-code
+	// a single unit per application
+	fakeCaasUnitTag, err := names.ParseUnitTag("unit-" + caasapplicationtag.Id() + "/0")
+	if err != nil {
+		return err
+	}
+	op.caasunit, err = op.st.CAASUnit(fakeCaasUnitTag)
+	if err != nil {
+		return err
+	}
 
-	// if op.caasunit.Life() == params.Dead {
-	// 	// If we started up already dead, we should not progress further. If we
-	// 	// become Dead immediately after starting up, we may well complete any
-	// 	// operations in progress before detecting it; but that race is fundamental
-	// 	// and inescapable, whereas this one is not.
-	// 	return jworker.ErrTerminateAgent
-	// }
+	if op.caasapplication.Life() == params.Dead {
+		// If we started up already dead, we should not progress further. If we
+		// become Dead immediately after starting up, we may well complete any
+		// operations in progress before detecting it; but that race is fundamental
+		// and inescapable, whereas this one is not.
+		return jworker.ErrTerminateAgent
+	}
 
 	if err := jujuc.EnsureSymlinks(op.paths.ToolsDir); err != nil {
 		return err
@@ -403,15 +409,15 @@ func (op *CaasOperator) init(caasapplicationtag names.ApplicationTag) (err error
 		return errors.Trace(err)
 	}
 
-	// XXX
-	// relations, err := relation.NewRelations(
-	// 	op.st, caasapplicationtag, op.paths.State.CharmDir,
-	// 	op.paths.State.RelationsDir, op.catacomb.Dying(),
-	// )
-	// if err != nil {
-	// 	return errors.Annotatef(err, "cannot create relations")
-	// }
-	// op.relations = relations
+	relations, err := relation.NewRelations(
+		op.st, op.caasunit.Tag(), op.paths.State.CharmDir,
+		op.paths.State.CharmDir, op.catacomb.Dying(),
+	)
+	if err != nil {
+		return errors.Annotatef(err, "cannot create relations for unit %v",
+			op.caasunit.Tag())
+	}
+	op.relations = relations
 
 	op.commands = runcommands.NewCommands()
 	op.commandChannel = make(chan string)
