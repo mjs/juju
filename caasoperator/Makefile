@@ -39,8 +39,12 @@ add-dockerhub-secret:
 
 local-update-restart: local-update restart-operators
 
-kubeworkers != juju status -m ${JUJU_K8S_MODEL} kubernetes-worker --format json | jq -c '.machines | keys' | tr  -c '[:digit:]' ' '
-local-update: image
+check-k8s-model:
+	@:$(if $(value JUJU_K8S_MODEL),, $(error Undefined JUJU_K8S_MODEL))
+	@juju show-model ${JUJU_K8S_MODEL} > /dev/null
+
+local-update: check-k8s-model image
+	$(eval kubeworkers != juju status -m ${JUJU_K8S_MODEL} kubernetes-worker --format json | jq -c '.machines | keys' | tr  -c '[:digit:]' ' ' 2>&1)
 	docker save ${DOCKER_USERNAME}/caasoperator | gzip > /tmp/caasoperator-image.tar.gz
 	$(foreach wm,$(kubeworkers), juju scp -m ${JUJU_K8S_MODEL} /tmp/caasoperator-image.tar.gz $(wm):/tmp/caasoperator-image.tar.gz ; )
 	$(foreach wm,$(kubeworkers), juju ssh -m ${JUJU_K8S_MODEL} $(wm) -- "zcat /tmp/caasoperator-image.tar.gz | docker load" ; )
