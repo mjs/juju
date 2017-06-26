@@ -19,11 +19,6 @@ import (
 	"gopkg.in/juju/names.v2"
 	worker "gopkg.in/juju/worker.v1"
 
-	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/rest"
-
 	"github.com/juju/juju/api/caasoperator"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/status"
@@ -163,23 +158,6 @@ func (op *CaasOperator) loop(caasoperatortag names.ApplicationTag) (err error) {
 		}
 		return errors.Annotatef(err, "failed to initialize caasoperator for %q", caasoperatortag)
 	}
-
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// creates the clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	pods, err := clientset.CoreV1().Pods("").List(v1.ListOptions{})
-	if err != nil {
-		panic(err.Error())
-	}
-	logger.Errorf("Kubes: There are %d pods in the cluster\n", len(pods.Items))
 
 	// Install is a special case, as it must run before there
 	// is any remote state, and before the remote state watcher
