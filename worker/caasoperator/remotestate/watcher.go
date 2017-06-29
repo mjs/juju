@@ -161,6 +161,15 @@ func (w *RemoteStateWatcher) setUp(applicationtag names.ApplicationTag) (err err
 	if err != nil {
 		return errors.Trace(err)
 	}
+
+	fakeCaasUnitTag, err := names.ParseUnitTag("unit-" + applicationtag.Id() + "/0")
+	if err != nil {
+		return errors.Trace(err)
+	}
+	w.caasUnit, err = w.st.CAASUnit(fakeCaasUnitTag)
+	if err != nil {
+		return errors.Trace(err)
+	}
 	return nil
 }
 

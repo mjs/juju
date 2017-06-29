@@ -10,7 +10,7 @@ import (
 	corecharm "gopkg.in/juju/charm.v6-unstable"
 	"gopkg.in/juju/charm.v6-unstable/hooks"
 	"gopkg.in/juju/names.v2"
-	//	worker "gopkg.in/juju/worker.v1"
+	worker "gopkg.in/juju/worker.v1"
 
 	"github.com/juju/juju/api/caasoperator"
 	"github.com/juju/juju/apiserver/params"
@@ -396,7 +396,7 @@ func (r *relations) update(remote map[int]remotestate.RelationSnapshot) error {
 // which case it will return resolver.ErrLoopAborted.
 func (r *relations) add(rel *caasoperator.Relation, dir *StateDir) (err error) {
 	logger.Infof("relations.add(): %q, storing state in %v", rel, dir)
-	ru, err := rel.CAASUnit(r.caasUnit)
+	ru, err := rel.Unit(r.caasUnit)
 	if err != nil {
 		return errors.Trace(err)
 	}

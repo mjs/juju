@@ -37,6 +37,7 @@ type Facade struct {
 	auth      facade.Authorizer
 	resources facade.Resources
 	app       *state.CAASApplication
+	caasUnit  *state.CAASUnit
 }
 
 func NewFacade(ctx facade.Context) (*Facade, error) {
@@ -47,6 +48,7 @@ func NewFacade(ctx facade.Context) (*Facade, error) {
 	// 	return nil, common.ErrPerm
 	// }
 	var app *state.CAASApplication
+	var caasUnit *state.CAASUnit
 	var err error
 	switch tag := authorizer.GetAuthTag().(type) {
 	case names.ApplicationTag:
@@ -54,6 +56,16 @@ func NewFacade(ctx facade.Context) (*Facade, error) {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
+		fakeCaasUnitTag, err := names.ParseUnitTag("unit-" + tag.Id() + "/0")
+		if err != nil {
+			return nil, err
+		}
+
+		caasUnit, err = st.CAASUnit(fakeCaasUnitTag.Id())
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
 	default:
 		return nil, errors.Errorf("expected names.ApplicationTag, got %T", tag)
 	}
@@ -76,6 +88,7 @@ func NewFacade(ctx facade.Context) (*Facade, error) {
 		auth:      authorizer,
 		resources: resources,
 		app:       app,
+		caasUnit:  caasUnit,
 	}, nil
 }
 
@@ -85,15 +98,10 @@ func accessAll(names.Tag) bool {
 
 // Resolved returns the current resolved setting for each given unit.
 func (f *Facade) Resolved(args params.Entities) (params.ResolvedModeResults, error) {
-	return params.ResolvedModeResults{}, errors.NotImplementedf("method")
-	/* XXX
 	result := params.ResolvedModeResults{
 		Results: make([]params.ResolvedModeResult, len(args.Entities)),
 	}
-	canAccess, err := f.accessUnit()
-	if err != nil {
-		return params.ResolvedModeResults{}, err
-	}
+	canAccess := accessAll // XXX CAAS access
 	for i, entity := range args.Entities {
 		tag, err := names.ParseUnitTag(entity.Tag)
 		if err != nil {
@@ -102,8 +110,8 @@ func (f *Facade) Resolved(args params.Entities) (params.ResolvedModeResults, err
 		}
 		err = common.ErrPerm
 		if canAccess(tag) {
-			var unit *state.Unit
-			unit, err = f.getUnit(tag)
+			var unit *state.CAASUnit
+			unit, err = f.getCAASUnit(tag)
 			if err == nil {
 				result.Results[i].Mode = params.ResolvedMode(unit.Resolved())
 			}
@@ -111,20 +119,14 @@ func (f *Facade) Resolved(args params.Entities) (params.ResolvedModeResults, err
 		result.Results[i].Error = common.ServerError(err)
 	}
 	return result, nil
-	*/
 }
 
 // ClearResolved removes any resolved setting from each given unit.
 func (f *Facade) ClearResolved(args params.Entities) (params.ErrorResults, error) {
-	return params.ErrorResults{}, errors.NotImplementedf("method")
-	/* XXX
 	result := params.ErrorResults{
 		Results: make([]params.ErrorResult, len(args.Entities)),
 	}
-	canAccess, err := f.accessUnit()
-	if err != nil {
-		return params.ErrorResults{}, err
-	}
+	canAccess := accessAll // XXX CAAS access
 	for i, entity := range args.Entities {
 		tag, err := names.ParseUnitTag(entity.Tag)
 		if err != nil {
@@ -133,8 +135,8 @@ func (f *Facade) ClearResolved(args params.Entities) (params.ErrorResults, error
 		}
 		err = common.ErrPerm
 		if canAccess(tag) {
-			var unit *state.Unit
-			unit, err = f.getUnit(tag)
+			var unit *state.CAASUnit
+			unit, err = f.getCAASUnit(tag)
 			if err == nil {
 				err = unit.ClearResolved()
 			}
@@ -142,7 +144,6 @@ func (f *Facade) ClearResolved(args params.Entities) (params.ErrorResults, error
 		result.Results[i].Error = common.ServerError(err)
 	}
 	return result, nil
-	*/
 }
 
 // Destroy advances all given Alive units' lifecycles as far as
@@ -627,7 +628,8 @@ func (f *Facade) JoinedRelations(args params.Entities) (params.StringsResults, e
 		}
 		err = common.ErrPerm
 		if canRead(tag) {
-			unit, err := f.getCAASUnit(tag)
+			var unit *state.CAASUnit
+			unit, err = f.getCAASUnit(tag)
 			if err == nil {
 				result.Results[i].Result, err = relationsInScopeTags(unit)
 			}
@@ -866,14 +868,14 @@ func (f *Facade) getOneRelationById(relId int) (params.RelationResult, error) {
 	} else if err != nil {
 		return nothing, err
 	}
-	tag := f.auth.GetAuthTag()
-	switch tag.(type) {
-	case names.UnitTag:
-		// do nothing
-	default:
-		panic("authenticated entity is not a unit")
-	}
-	unit, err := f.st.FindEntity(tag)
+	// tag := f.auth.GetAuthTag()
+	// switch tag.(type) {
+	// case names.UnitTag:
+	// 	// do nothing
+	// default:
+	// 	panic("authenticated entity is not a unit")
+	// }
+	unit, err := f.st.FindEntity(f.caasUnit.Tag())
 	if err != nil {
 		return nothing, err
 	}
