@@ -148,13 +148,10 @@ func (st *State) getOneAction(tag *names.ActionTag) (params.ActionResult, error)
 
 // CAASUnit provides access to methods of a state.CAASUnit through the facade.
 func (st *State) CAASUnit(tag names.UnitTag) (*CAASUnit, error) {
-	// TODO(mmcc): API: st.life() uses apiconnection, hardcoding:
-	// life, err := st.life(tag)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	life := params.Alive
-	// end todo
+	life, err := st.life(tag)
+	if err != nil {
+		return nil, err
+	}
 	return &CAASUnit{
 		tag:  tag,
 		life: life,
@@ -204,7 +201,13 @@ func (st *State) Charm(curl *charm.URL) (*Charm, error) {
 
 // Relation returns the existing relation with the given tag.
 func (st *State) Relation(relationTag names.RelationTag) (*Relation, error) {
-	result, err := st.relation(relationTag, st.applicationTag)
+	// MMCC TEMP: to test relations in the prototype, we hard-code
+	// a single unit per application
+	fakeCaasUnitTag, err := names.ParseUnitTag("unit-" + st.applicationTag.Id() + "/0")
+	if err != nil {
+		return nil, err
+	}
+	result, err := st.relation(relationTag, fakeCaasUnitTag)
 	if err != nil {
 		return nil, err
 	}

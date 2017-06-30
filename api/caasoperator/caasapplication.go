@@ -107,6 +107,7 @@ func (s *CAASApplication) WatchRelations() (watcher.StringsWatcher, error) {
 	args := params.Entities{
 		Entities: []params.Entity{{Tag: s.tag.String()}},
 	}
+	logger.Debugf("About to make WatchApplicationRelations facade call with args=%v", args)
 	err := s.st.facade.FacadeCall("WatchApplicationRelations", args, &results)
 	if err != nil {
 		return nil, err

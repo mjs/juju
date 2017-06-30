@@ -185,6 +185,8 @@ func (st *CAASState) FindEntity(tag names.Tag) (Entity, error) {
 		return st.User(tag)
 	case names.ApplicationTag:
 		return st.CAASApplication(id)
+	case names.UnitTag:
+		return st.CAASUnit(id)
 	default:
 		return nil, errors.Errorf("unsupported tag %T", tag)
 	}

@@ -1418,7 +1418,7 @@ func (a *Application) Relations() (relations []*Relation, err error) {
 	return applicationRelations(a.st, a.doc.Name)
 }
 
-func applicationRelations(st *State, name string) (relations []*Relation, err error) {
+func applicationRelations(st modelBackend, name string) (relations []*Relation, err error) {
 	defer errors.DeferredAnnotatef(&err, "can't get relations for application %q", name)
 	relationsCollection, closer := st.db().GetCollection(relationsC)
 	defer closer()

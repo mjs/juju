@@ -499,12 +499,12 @@ func (op *CAASUnit) RequestReboot() error {
 }
 
 // JoinedRelations returns the tags of the relations the caasunit has joined.
-func (op *CAASUnit) JoinedRelations() ([]names.RelationTag, error) {
+func (u *CAASUnit) JoinedRelations() ([]names.RelationTag, error) {
 	var results params.StringsResults
 	args := params.Entities{
-		Entities: []params.Entity{{Tag: op.tag.String()}},
+		Entities: []params.Entity{{Tag: u.tag.String()}},
 	}
-	err := op.st.facade.FacadeCall("JoinedRelations", args, &results)
+	err := u.st.facade.FacadeCall("JoinedRelations", args, &results)
 	if err != nil {
 		return nil, err
 	}

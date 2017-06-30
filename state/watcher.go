@@ -392,6 +392,10 @@ func (a *Application) WatchRelations() StringsWatcher {
 	return watchApplicationRelations(a.st, a.doc.Name)
 }
 
+func (a *CAASApplication) WatchRelations() StringsWatcher {
+	return watchApplicationRelations(a.st, a.doc.Name)
+}
+
 // WatchRelations returns a StringsWatcher that notifies of changes to the
 // lifecycles of relations involving s.
 func (s *RemoteApplication) WatchRelations() StringsWatcher {
@@ -409,7 +413,7 @@ func watchApplicationRelations(backend modelBackend, applicationName string) Str
 		out := strings.HasPrefix(k, prefix) || strings.Contains(k, infix)
 		return out
 	}
-
+	logger.Debugf("starting lifecycle watcher for relations with applicationName: %v", applicationName)
 	members := bson.D{{"endpoints.applicationname", applicationName}}
 	return newLifecycleWatcher(backend, relationsC, members, filter, nil)
 }
@@ -1358,6 +1362,11 @@ func (a *Application) WatchLeaderSettings() NotifyWatcher {
 // Watch returns a watcher for observing changes to a unit.
 func (u *Unit) Watch() NotifyWatcher {
 	return newEntityWatcher(u.st, unitsC, u.doc.DocID)
+}
+
+// Watch returns a watcher for observing changes to a unit.
+func (u *CAASUnit) Watch() NotifyWatcher {
+	return newEntityWatcher(u.st, caasUnitsC, u.doc.DocID)
 }
 
 // Watch returns a watcher for observing changes to a model.

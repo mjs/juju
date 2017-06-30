@@ -223,11 +223,10 @@ func (s *caasoperatorResolver) nextOp(
 	case params.Dying:
 		// Normally we handle relations last, but if we're dying we
 		// must ensure that all relations are broken first.
-		// XXX CAAS
-		// op, err := s.config.Relations.NextOp(localState, remoteState, opFactory)
-		// if errors.Cause(err) != resolver.ErrNoOperation {
-		// 	return op, err
-		// }
+		op, err := s.config.Relations.NextOp(localState, remoteState, opFactory)
+		if errors.Cause(err) != resolver.ErrNoOperation {
+			return op, err
+		}
 
 		// We're not in a hook error and the unit is Dying,
 		// so we should proceed to tear down.
@@ -261,11 +260,11 @@ func (s *caasoperatorResolver) nextOp(
 		return opFactory.NewRunHook(hook.Info{Kind: hooks.ConfigChanged})
 	}
 
-	// XXX CAAS
-	// op, err := s.config.Relations.NextOp(localState, remoteState, opFactory)
-	// if errors.Cause(err) != resolver.ErrNoOperation {
-	// 	return op, err
-	// }
+	logger.Debugf("about to see if RelationsResolver has a next op for remote state = %v and local state = %v")
+	op, err := s.config.Relations.NextOp(localState, remoteState, opFactory)
+	if errors.Cause(err) != resolver.ErrNoOperation {
+		return op, err
+	}
 
 	// UpdateStatus hook runs if nothing else needs to.
 	if localState.UpdateStatusVersion != remoteState.UpdateStatusVersion {
