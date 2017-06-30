@@ -32,7 +32,7 @@ arguments, environment and image.
 	return &cmd.Info{
 		Name:    "run-container",
 		Args:    "<name> <args> <env> <image>",
-		Purpose: "tell container framework to start one container",
+		Purpose: "Tell container framework to start one container",
 		Doc:     doc,
 	}
 }
@@ -41,6 +41,7 @@ func (c *RunContainerCommand) SetFlags(f *gnuflag.FlagSet) {
 }
 
 func (c *RunContainerCommand) Init(args []string) error {
+	logger.Debugf("in RunContainerCommand Init. args=%v", args)
 	if len(args) != 4 {
 		return errors.Errorf("invalid args, requires <name> <args> <env> <image>")
 	}
