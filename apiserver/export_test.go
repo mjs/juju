@@ -95,7 +95,7 @@ func TestingAPIRoot(facades *facade.Registry) rpc.Root {
 // TestingAPIHandler gives you an APIHandler that isn't connected to
 // anything real. It's enough to let test some basic functionality though.
 func TestingAPIHandler(c *gc.C, pool *state.StatePool, st *state.State) (*apiHandler, *common.Resources) {
-	authCtxt, err := newAuthContext(pool.SystemState())
+	authCtxt, err := newAuthContext(pool.ControllerState())
 	c.Assert(err, jc.ErrorIsNil)
 	srv := &Server{
 		authCtxt:  authCtxt,

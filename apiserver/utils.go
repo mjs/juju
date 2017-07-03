@@ -43,7 +43,7 @@ type validateArgs struct {
 //
 // It returns the validated model UUID.
 func validateModelUUID(args validateArgs) (string, error) {
-	ssState := args.statePool.SystemState()
+	ssState := args.statePool.ControllerState()
 	if args.modelUUID == "" {
 		// We allow the modelUUID to be empty so that:
 		//    TODO: server a limited API at the root (empty modelUUID)

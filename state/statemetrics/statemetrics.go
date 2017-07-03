@@ -136,7 +136,7 @@ func (c *Collector) updateMetrics() {
 	logger.Tracef("updating state metrics")
 	defer logger.Tracef("updated state metrics")
 
-	st := c.pool.SystemState()
+	st := c.pool.ControllerState()
 	models, err := st.AllModels()
 	if err != nil {
 		logger.Debugf("error getting models: %v", err)

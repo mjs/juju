@@ -15,11 +15,18 @@ import (
 
 // NewStatePool returns a new StatePool instance. It takes a State
 // connected to the system (controller model).
-func NewStatePool(systemState *State) *StatePool {
-	return &StatePool{
-		systemState: systemState,
-		pool:        make(map[string]*PoolItem),
+func NewStatePool(controller *Controller) (*StatePool, error) {
+	pool := &StatePool{
+		controller: controller,
+		pool:       make(map[string]*PoolItem),
 	}
+	ctlrState, releaser, err := pool.Get(controller.controllerModelTag.Id())
+	if err != nil {
+		return nil, errors.Annotate(err, "opening controller state")
+	}
+	pool.ctlrState = ctlrState
+	pool.ctlrStateReleaser = releaser
+	return pool, nil
 }
 
 // PoolItem holds a State and tracks how many requests are using it
@@ -38,12 +45,15 @@ func (i *PoolItem) refCount() int {
 // models. Clients should call Release when they have finished with any
 // state.
 type StatePool struct {
-	systemState *State
+	controller        *Controller
+	ctlrState         *State
+	ctlrStateReleaser StatePoolReleaser
+
 	// mu protects pool
 	mu   sync.Mutex
 	pool map[string]*PoolItem
 	// sourceKey is used to provide a unique number as a key for the
-	// referencesSources structure in the pool.
+	// referenceSources structure in the pool.
 	sourceKey uint64
 }
 
@@ -57,10 +67,6 @@ type StatePoolReleaser func() bool
 // if required. If the State has been marked for removal because there
 // are outstanding uses, an error will be returned.
 func (p *StatePool) Get(modelUUID string) (*State, StatePoolReleaser, error) {
-	if modelUUID == p.systemState.ModelUUID() {
-		return p.systemState, func() bool { return false }, nil
-	}
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -95,7 +101,7 @@ func (p *StatePool) Get(modelUUID string) (*State, StatePoolReleaser, error) {
 		return item.state, releaser, nil
 	}
 
-	st, err := p.systemState.ForModel(names.NewModelTag(modelUUID))
+	st, err := p.controller.NewState(names.NewModelTag(modelUUID))
 	if err != nil {
 		return nil, nil, errors.Annotatef(err, "failed to create state for model %v", modelUUID)
 	}
@@ -108,17 +114,17 @@ func (p *StatePool) Get(modelUUID string) (*State, StatePoolReleaser, error) {
 	return st, releaser, nil
 }
 
+// ControllerState returns the State for the controller model.
+func (p *StatePool) ControllerState() *State {
+	return p.ctlrState
+}
+
 // release indicates that the client has finished using the State. If the
 // state has been marked for removal, it will be closed and removed
 // when the final Release is done; if there are no references, it will be
 // closed and removed immediately. The boolean result reports whether or
 // not the state was closed and removed.
 func (p *StatePool) release(modelUUID string, key uint64) (bool, error) {
-	if modelUUID == p.systemState.ModelUUID() {
-		// We don't maintain a refcount for the controller.
-		return false, nil
-	}
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -138,11 +144,6 @@ func (p *StatePool) release(modelUUID string, key uint64) (bool, error) {
 // corresponding Releases). The boolean result indicates whether or
 // not the state was removed.
 func (p *StatePool) Remove(modelUUID string) (bool, error) {
-	if modelUUID == p.systemState.ModelUUID() {
-		// We don't manage the controller state.
-		return false, nil
-	}
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -164,11 +165,6 @@ func (p *StatePool) maybeRemoveItem(modelUUID string, item *PoolItem) (bool, err
 	return false, nil
 }
 
-// SystemState returns the State passed in to NewStatePool.
-func (p *StatePool) SystemState() *State {
-	return p.systemState
-}
-
 // KillWorkers tells the internal worker for all cached State
 // instances in the pool to die.
 func (p *StatePool) KillWorkers() {
@@ -181,6 +177,8 @@ func (p *StatePool) KillWorkers() {
 
 // Close closes all State instances in the pool.
 func (p *StatePool) Close() error {
+	p.ctlrStateReleaser() // Release the controller state.
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

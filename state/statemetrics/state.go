@@ -13,7 +13,7 @@ import (
 
 // StatePool represents a pool of State objects.
 type StatePool interface {
-	SystemState() State
+	ControllerState() State
 	Get(modelUUID string) (State, state.StatePoolReleaser, error)
 }
 
@@ -57,8 +57,8 @@ type statePoolShim struct {
 	*state.StatePool
 }
 
-func (p statePoolShim) SystemState() State {
-	return stateShim{p.StatePool.SystemState()}
+func (p statePoolShim) ControllerState() State {
+	return stateShim{p.StatePool.ControllerState()}
 }
 
 func (p statePoolShim) Get(modelUUID string) (State, state.StatePoolReleaser, error) {
