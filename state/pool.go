@@ -13,19 +13,12 @@ import (
 	"gopkg.in/juju/names.v2"
 )
 
-// NewStatePool returns a new StatePool instance. It takes a State
-// connected to the system (controller model).
-func NewStatePool(controller *Controller) (*StatePool, error) {
+// NewStatePool returns a new StatePool instance for Controller given.
+func NewStatePool(controller *Controller) *StatePool {
 	pool := &StatePool{
 		controller: controller,
 		pool:       make(map[string]*PoolItem),
 	}
-	ctlrState, releaser, err := pool.Get(controller.controllerModelTag.Id())
-	if err != nil {
-		return nil, errors.Annotate(err, "opening controller state")
-	}
-	pool.ctlrState = ctlrState
-	pool.ctlrStateReleaser = releaser
 	return pool, nil
 }
 
@@ -45,9 +38,7 @@ func (i *PoolItem) refCount() int {
 // models. Clients should call Release when they have finished with any
 // state.
 type StatePool struct {
-	controller        *Controller
-	ctlrState         *State
-	ctlrStateReleaser StatePoolReleaser
+	controller *Controller
 
 	// mu protects pool
 	mu   sync.Mutex
@@ -114,11 +105,6 @@ func (p *StatePool) Get(modelUUID string) (*State, StatePoolReleaser, error) {
 	return st, releaser, nil
 }
 
-// ControllerState returns the State for the controller model.
-func (p *StatePool) ControllerState() *State {
-	return p.ctlrState
-}
-
 // release indicates that the client has finished using the State. If the
 // state has been marked for removal, it will be closed and removed
 // when the final Release is done; if there are no references, it will be
@@ -177,8 +163,6 @@ func (p *StatePool) KillWorkers() {
 
 // Close closes all State instances in the pool.
 func (p *StatePool) Close() error {
-	p.ctlrStateReleaser() // Release the controller state.
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
