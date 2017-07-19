@@ -201,31 +201,26 @@ func (st *CAASState) modelSetupOps(modelUUID, controllerUUID string, args CAASMo
 	}
 	*/
 	return []txn.Op{
-		createCAASModelOp(
-			args.Owner, args.Name, modelUUID, controllerUUID,
-			args.Endpoint, args.CertData, args.KeyData, args.CAData),
+		createCAASModelOp(modelUUID, controllerUUID, args),
 		createUniqueOwnerModelNameOp(args.Owner, args.Name),
 	}, nil
 }
 
 // createCAASModelOp returns the operation needed to create
 // a caasModel document with the given name and UUID.
-func createCAASModelOp(
-	owner names.UserTag,
-	name, uuid, controllerUUID string,
-	endpoint string,
-	certData, keyData, caData []byte,
-) txn.Op {
+func createCAASModelOp(uuid, controllerUUID string, args CAASModelArgs) txn.Op {
 	doc := &caasModelDoc{
 		UUID:           uuid,
-		Name:           name,
+		Name:           args.Name,
 		Life:           Alive,
-		Owner:          owner.Id(),
+		Owner:          args.Owner.Id(),
 		ControllerUUID: controllerUUID,
-		Endpoint:       endpoint,
-		CertData:       certData,
-		KeyData:        keyData,
-		CAData:         caData,
+		Endpoint:       args.Endpoint,
+		CAData:         args.CAData,
+		CertData:       args.CertData,
+		KeyData:        args.KeyData,
+		Username:       args.Username,
+		Password:       args.Password,
 	}
 	return txn.Op{
 		C:      caasModelsC,

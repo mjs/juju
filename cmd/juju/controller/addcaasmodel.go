@@ -76,7 +76,8 @@ func (c *addCAASModelCommand) Init(args []string) error {
 type AddCAASModelAPI interface {
 	CreateCAASModel(
 		name, owner, endpoint string,
-		certData, keyData, caData []byte,
+		caData, certData, keyData []byte,
+		username, password string,
 	) (string, error)
 }
 
@@ -115,9 +116,11 @@ func (c *addCAASModelCommand) Run(ctx *cmd.Context) error {
 		c.Name,
 		modelOwner,
 		config.Host,
+		config.CAData,
 		config.CertData,
 		config.KeyData,
-		config.CAData,
+		config.Username,
+		config.Password,
 	)
 	if err != nil {
 		if params.IsCodeUnauthorized(err) {

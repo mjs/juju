@@ -328,7 +328,7 @@ func (m *ModelManagerAPI) CreateModel(args params.ModelCreateArgs) (params.Model
 
 // CreateCAASModel creates a new CAAS model.
 func (m *ModelManagerAPI) CreateCAASModel(args params.CAASModelCreateArgs) (params.CAASModelInfo, error) {
-	// XXX validate args here
+	// XXX CAAS validate args here
 
 	result := params.CAASModelInfo{}
 	canAddModel, err := m.authorizer.HasPermission(permission.AddModelAccess, m.state.ControllerTag())
@@ -360,9 +360,11 @@ func (m *ModelManagerAPI) CreateCAASModel(args params.CAASModelCreateArgs) (para
 		Name:     args.Name,
 		Owner:    ownerTag,
 		Endpoint: args.Endpoint,
+		CAData:   args.CAData,
 		CertData: args.CertData,
 		KeyData:  args.KeyData,
-		CAData:   args.CAData,
+		Username: args.Username,
+		Password: args.Password,
 	})
 	if err != nil {
 		return result, errors.Annotate(err, "failed to create new model")

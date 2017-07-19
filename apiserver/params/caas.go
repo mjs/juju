@@ -34,4 +34,6 @@ type CAASProvisioningConfig struct {
 	CAData   []byte `json:"ca-data"`
 	CertData []byte `json:"cert-data"`
 	KeyData  []byte `json:"key-data"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }

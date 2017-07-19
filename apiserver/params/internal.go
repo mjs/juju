@@ -142,9 +142,11 @@ type CAASModelCreateArgs struct {
 	Name     string `json:"name"`
 	OwnerTag string `json:"owner-tag"`
 	Endpoint string `json:"endpoint"`
+	CAData   []byte `json:"ca-data"`
 	CertData []byte `json:"cert-data"`
 	KeyData  []byte `json:"key-data"`
-	CAData   []byte `json:"ca-data"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // Model holds the result of an API call returning a name and UUID

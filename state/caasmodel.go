@@ -30,9 +30,11 @@ type caasModelDoc struct {
 	Endpoint       string `bson:"endpoint"`
 	// XXX these should live in a general store for easy
 	// updating. Generalise the cloud credentials store.
+	CAData   []byte `bson:"ca-data"`
 	CertData []byte `bson:"cert-data"`
 	KeyData  []byte `bson:"key-data"`
-	CAData   []byte `bson:"ca-data"`
+	Username string `bson:"username"`
+	Password string `bson:"password"`
 }
 
 // CAASModelArgs is a params struct for creating a new CAAS model.
@@ -42,9 +44,11 @@ type CAASModelArgs struct {
 	Name     string
 	Owner    names.UserTag
 	Endpoint string
+	CAData   []byte
 	CertData []byte
 	KeyData  []byte
-	CAData   []byte
+	Username string
+	Password string
 }
 
 func (st *State) NewCAASModel(args CAASModelArgs) (*CAASModel, *CAASState, error) {
@@ -199,6 +203,14 @@ func (m *CAASModel) KeyData() []byte {
 
 func (m *CAASModel) CAData() []byte {
 	return m.doc.CAData
+}
+
+func (m *CAASModel) Username() string {
+	return m.doc.Username
+}
+
+func (m *CAASModel) Password() string {
+	return m.doc.Password
 }
 
 func (m *CAASModel) Refresh() error {

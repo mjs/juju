@@ -79,6 +79,8 @@ func (a *API) ProvisioningConfig() (params.CAASProvisioningConfig, error) {
 		CAData:   a.model.CAData(),
 		CertData: a.model.CertData(),
 		KeyData:  a.model.KeyData(),
+		Username: a.model.Username(),
+		Password: a.model.Password(),
 	}, nil
 }
 

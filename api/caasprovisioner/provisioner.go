@@ -19,6 +19,8 @@ type Config struct {
 	CAData   []byte
 	CertData []byte
 	KeyData  []byte
+	Username string
+	Password string
 }
 
 type State struct {
@@ -76,6 +78,8 @@ func (st *State) ProvisioningConfig() (*Config, error) {
 		CAData:   result.CAData,
 		CertData: result.CertData,
 		KeyData:  result.KeyData,
+		Username: result.Username,
+		Password: result.Password,
 	}, nil
 }
 

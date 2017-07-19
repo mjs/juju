@@ -35,7 +35,9 @@ func newK8sConfig(st *apicaasprovisioner.State) (*rest.Config, error) {
 		return nil, errors.Trace(err)
 	}
 	return &rest.Config{
-		Host: config.Endpoint,
+		Host:     config.Endpoint,
+		Username: config.Username,
+		Password: config.Password,
 		TLSClientConfig: rest.TLSClientConfig{
 			CertData: config.CertData,
 			KeyData:  config.KeyData,
