@@ -260,7 +260,6 @@ func (s *caasoperatorResolver) nextOp(
 		return opFactory.NewRunHook(hook.Info{Kind: hooks.ConfigChanged})
 	}
 
-	logger.Debugf("about to see if RelationsResolver has a next op for remote state = %v and local state = %v")
 	op, err := s.config.Relations.NextOp(localState, remoteState, opFactory)
 	if errors.Cause(err) != resolver.ErrNoOperation {
 		return op, err
