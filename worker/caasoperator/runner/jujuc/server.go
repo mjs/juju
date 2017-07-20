@@ -56,6 +56,7 @@ var baseCommands = map[string]creator{
 	"relation-list" + cmdSuffix:           NewRelationListCommand,
 	"relation-set" + cmdSuffix:            NewRelationSetCommand,
 	"relation-get" + cmdSuffix:            NewRelationGetCommand,
+	"unit-get" + cmdSuffix:                NewUnitGetCommand,
 }
 
 func allEnabledCommands() map[string]creator {

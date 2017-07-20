@@ -116,6 +116,7 @@ func (f *contextFactory) coreContext() (*HookContext, error) {
 		uuid:            f.modelUUID,
 		envName:         f.envName,
 		applicationName: f.app.Name(),
+		unitName:        f.app.Name() + "/0",
 		relations:       f.getContextRelations(),
 		relationId:      -1,
 		pendingPorts:    make(map[PortRange]PortRangeInfo),
