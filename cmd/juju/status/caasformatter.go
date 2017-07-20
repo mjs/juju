@@ -7,6 +7,8 @@ import (
 	"gopkg.in/juju/charm.v6-unstable"
 
 	"github.com/juju/juju/apiserver/params"
+	"github.com/juju/juju/cmd/juju/common"
+	"github.com/juju/juju/status"
 )
 
 type caasStatusFormatter struct {
@@ -97,6 +99,7 @@ func (csf *caasStatusFormatter) formatCAASApplication(name string, caasApp param
 		CanUpgradeTo: caasApp.CanUpgradeTo,
 		Units:        make(map[string]caasUnitStatus),
 		Version:      caasApp.WorkloadVersion,
+		StatusInfo:   csf.getApplicationStatusInfo(caasApp),
 	}
 	for k, m := range caasApp.Units {
 		out.Units[k] = caasUnitStatus{}
@@ -109,4 +112,17 @@ func (csf *caasStatusFormatter) formatCAASApplication(name string, caasApp param
 		})*/
 	}
 	return out
+}
+
+func (csf *caasStatusFormatter) getApplicationStatusInfo(caasApp params.CAASApplicationStatus) statusInfoContents {
+	info := statusInfoContents{
+		Err:     caasApp.Status.Err,
+		Current: status.Status(caasApp.Status.Status),
+		Message: caasApp.Status.Info,
+		Version: caasApp.Status.Version,
+	}
+	if caasApp.Status.Since != nil {
+		info.Since = common.FormatTime(caasApp.Status.Since, csf.isoTime)
+	}
+	return info
 }

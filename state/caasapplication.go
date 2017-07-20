@@ -763,6 +763,10 @@ func (a *CAASApplication) IsRemote() bool {
 	return false
 }
 
+func (a *CAASApplication) Status() (status.StatusInfo, error) {
+	return getStatus(a.st, a.globalKey(), "application")
+}
+
 // SetStatus sets the status for the application.
 func (a *CAASApplication) SetStatus(statusInfo status.StatusInfo) error {
 	if !status.ValidWorkloadStatus(statusInfo.Status) {

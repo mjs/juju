@@ -165,6 +165,16 @@ func (context *statusContext) processCAASApplication(caasApp *state.CAASApplicat
 	units := context.units[caasApp.Name()]
 	processedStatus.Units = context.processUnits(units, caasAppCharm.URL().String())
 
+	appStatus, err := caasApp.Status()
+	if err != nil {
+		processedStatus.Err = common.ServerError(err)
+		return processedStatus
+	}
+	processedStatus.Status.Status = appStatus.Status.String()
+	processedStatus.Status.Info = appStatus.Message
+	processedStatus.Status.Data = appStatus.Data
+	processedStatus.Status.Since = appStatus.Since
+
 	versions := make([]status.StatusInfo, 0, len(units))
 	for _, unit := range units {
 		statuses, err := unit.WorkloadVersionHistory().StatusHistory(
