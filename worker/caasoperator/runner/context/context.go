@@ -6,6 +6,7 @@
 package context
 
 import (
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -312,6 +313,7 @@ func (ctx *HookContext) SetCaasUnitStatus(caasUnitStatus jujuc.StatusInfo) error
 }
 
 func (ctx *HookContext) RunContainer(containerInfo jujuc.ContainerInfo) error {
+
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return err
@@ -322,9 +324,53 @@ func (ctx *HookContext) RunContainer(containerInfo jujuc.ContainerInfo) error {
 		return err
 	}
 
-	logger.Debugf("deploying image %v", containerInfo)
-
 	containerName := ctx.podName(containerInfo.Name)
+	r := regexp.MustCompile("'.+'|\".+\"|\\S+")
+	args := r.FindAllString(containerInfo.Args, -1)
+
+	env := []v1.EnvVar{}
+	splitEnv := strings.Split(containerInfo.Environment, " ")
+	logger.Debugf("containerInfo.Environment = %v, splitEnv=%v", containerInfo.Environment, splitEnv)
+	for _, variable := range splitEnv {
+		splitVariable := strings.Split(variable, "=")
+		switch {
+		case len(splitVariable) < 1:
+			fallthrough
+		case len(splitVariable) > 2:
+			return errors.Errorf("Could not parse container environment")
+		case len(splitVariable) == 2:
+			env = append(env, v1.EnvVar{
+				Name:  splitVariable[0],
+				Value: splitVariable[1],
+			})
+		case len(splitVariable) == 1:
+			env = append(env, v1.EnvVar{
+				Name: splitVariable[0],
+			})
+		}
+
+	}
+	logger.Debugf("about to submit podspec for application %s, args=%v env=%v", ctx.applicationName, args, env)
+
+	var containerspec v1.Container
+	switch len(env) {
+	case 0:
+		containerspec = v1.Container{
+			Name:            containerName,
+			Image:           containerInfo.Image,
+			ImagePullPolicy: v1.PullIfNotPresent,
+			Args:            args,
+		}
+	case 1:
+		containerspec = v1.Container{
+			Name:            containerName,
+			Image:           containerInfo.Image,
+			ImagePullPolicy: v1.PullIfNotPresent,
+			Args:            args,
+			Env:             env,
+		}
+	}
+
 	spec := &v1.Pod{
 		ObjectMeta: v1.ObjectMeta{
 			Name: containerName,
@@ -333,12 +379,7 @@ func (ctx *HookContext) RunContainer(containerInfo jujuc.ContainerInfo) error {
 			},
 		},
 		Spec: v1.PodSpec{
-			Containers: []v1.Container{{
-				Name:            containerName,
-				Image:           containerInfo.Image,
-				ImagePullPolicy: v1.PullIfNotPresent,
-				Args:            []string{}, // MMCC TODO
-			}},
+			Containers: []v1.Container{containerspec},
 		},
 	}
 	_, err = client.CoreV1().Pods("default").Create(spec) // XXX TODO namespace
