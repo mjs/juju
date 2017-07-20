@@ -194,16 +194,15 @@ func (s *CAASApplication) CharmURL() (*charm.URL, bool, error) {
 	return nil, false, fmt.Errorf("%q has no charm url set", s.tag)
 }
 
-// SetStatus sets the status of the service if the passed unitName,
-// corresponding to the calling unit, is of the leader.
-func (s *CAASApplication) SetStatus(unitName string, serviceStatus status.Status, info string, data map[string]interface{}) error {
-	tag := names.NewUnitTag(unitName)
+// SetStatus sets the status of the service.
+func (s *CAASApplication) SetStatus(appName string, stat status.Status, info string, data map[string]interface{}) error {
+	tag := names.NewApplicationTag(appName)
 	var result params.ErrorResults
 	args := params.SetStatus{
 		Entities: []params.EntityStatusArgs{
 			{
 				Tag:    tag.String(),
-				Status: serviceStatus.String(),
+				Status: stat.String(),
 				Info:   info,
 				Data:   data,
 			},

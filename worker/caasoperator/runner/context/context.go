@@ -25,6 +25,7 @@ import (
 	"github.com/juju/juju/api/caasoperator"
 	"github.com/juju/juju/apiserver/params"
 	"github.com/juju/juju/network"
+	"github.com/juju/juju/status"
 	"github.com/juju/juju/worker/caasoperator/runner/jujuc"
 )
 
@@ -410,20 +411,15 @@ func (ctx *HookContext) AllCAASUnits() ([]caasoperator.CAASUnit, error) {
 // SetApplicationStatus will set the given status to the service to which this
 // caasoperator's belong.
 func (ctx *HookContext) SetApplicationStatus(serviceStatus jujuc.StatusInfo) error {
-	logger.Tracef("[APPLICATION-STATUS] %s: %s", serviceStatus.Status, serviceStatus.Info)
+	logger.Debugf("[APPLICATION-STATUS] %s: %s", serviceStatus.Status, serviceStatus.Info)
+	ctx.hasRunStatusSet = true
 
-	// XXX
-	// service, err := ctx.caasUnit.CAASApplication()
-	// if err != nil {
-	// 	return errors.Trace(err)
-	// }
-	// return service.SetStatus(
-	// 	ctx.caasUnit.Name(),
-	// 	status.Status(serviceStatus.Status),
-	// 	serviceStatus.Info,
-	// 	serviceStatus.Data,
-	// )
-	return nil
+	return ctx.app.SetStatus(
+		ctx.app.Name(),
+		status.Status(serviceStatus.Status),
+		serviceStatus.Info,
+		serviceStatus.Data,
+	)
 }
 
 func (ctx *HookContext) HasExecutionSetApplicationStatus() bool {

@@ -146,9 +146,7 @@ func formatTabularCAAS(writer io.Writer, forceColor bool, fs *formattedCAASStatu
 		} else {
 			w.Print(scale)
 		}
-		// Notes may well contain other things later.
-		notes := ""
-		p(app.CharmName, app.CharmOrigin, app.CharmRev, notes)
+		p(app.CharmName, app.CharmOrigin, app.CharmRev, app.StatusInfo.Message)
 
 		for un, u := range app.Units {
 			units[un] = u

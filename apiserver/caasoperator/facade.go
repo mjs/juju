@@ -6,6 +6,7 @@ package caasoperator
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/juju/loggo"
@@ -18,6 +19,7 @@ import (
 	"github.com/juju/juju/state"
 	"github.com/juju/juju/state/multiwatcher"
 	"github.com/juju/juju/state/watcher"
+	"github.com/juju/juju/status"
 )
 
 var logger = loggo.GetLogger("juju.apiserver.caasoperator")
@@ -799,6 +801,45 @@ func (f *Facade) UpdateSettings(args params.RelationUnitsSettings) (params.Error
 		result.Results[i].Error = common.ServerError(err)
 	}
 	return result, nil
+}
+
+func (f *Facade) SetApplicationStatus(args params.SetStatus) (params.ErrorResults, error) {
+	// XXX CAAS access checks
+
+	result := params.ErrorResults{
+		Results: make([]params.ErrorResult, len(args.Entities)),
+	}
+	if len(args.Entities) == 0 {
+		return result, nil
+	}
+
+	for i, arg := range args.Entities {
+		tag, err := names.ParseApplicationTag(arg.Tag)
+		if err != nil {
+			result.Results[i].Error = common.ServerError(err)
+			continue
+		}
+
+		app, err := f.st.CAASApplication(tag.Id())
+		if err != nil {
+			result.Results[i].Error = common.ServerError(err)
+			continue
+		}
+
+		now := time.Now()
+		sInfo := status.StatusInfo{
+			Status:  status.Status(arg.Status),
+			Message: arg.Info,
+			Data:    arg.Data,
+			Since:   &now,
+		}
+		if err := app.SetStatus(sInfo); err != nil {
+			result.Results[i].Error = common.ServerError(err)
+		}
+
+	}
+	return result, nil
+
 }
 
 // WatchRelationUnits returns a RelationUnitsWatcher for observing

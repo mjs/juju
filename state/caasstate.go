@@ -303,14 +303,16 @@ func (st *CAASState) AddCAASApplication(args AddCAASApplicationArgs) (_ *CAASApp
 				return nil, errLocalApplicationExists
 			}
 		}
+
 		// The addCAASApplicationOps does not include the model alive assertion,
 		// so we add it here.
 		ops := []txn.Op{
 			assertCAASModelActiveOp(st.ModelUUID()),
 		}
 		addOps, err := addCAASApplicationOps(st, addCAASApplicationOpsArgs{
-			appDoc:   appDoc,
-			settings: map[string]interface{}(args.Settings),
+			appDoc:    appDoc,
+			statusDoc: statusDoc,
+			settings:  map[string]interface{}(args.Settings),
 		})
 		if err != nil {
 			return nil, errors.Trace(err)
