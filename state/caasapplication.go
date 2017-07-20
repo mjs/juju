@@ -690,11 +690,12 @@ func addCAASApplicationOps(st *CAASState, args addCAASApplicationOpsArgs) ([]txn
 	}
 
 	app := newCAASApplication(st, args.appDoc)
-
+	globalKey := app.globalKey()
 	settingsKey := app.settingsKey()
 
 	ops := []txn.Op{
 		createSettingsOp(settingsC, settingsKey, args.settings),
+		createStatusOp(st, globalKey, args.statusDoc),
 		// XXX addModelCAASApplicationRefOp(st, app.Name()),
 	}
 	ops = append(ops, charmRefOps...)
@@ -708,8 +709,9 @@ func addCAASApplicationOps(st *CAASState, args addCAASApplicationOpsArgs) ([]txn
 }
 
 type addCAASApplicationOpsArgs struct {
-	appDoc   *caasApplicationDoc
-	settings map[string]interface{}
+	appDoc    *caasApplicationDoc
+	statusDoc statusDoc
+	settings  map[string]interface{}
 }
 
 // Endpoints returns the application's currently available relation endpoints.
@@ -759,4 +761,19 @@ func (a *CAASApplication) Endpoint(relationName string) (Endpoint, error) {
 // IsRemote returns false for a local application.
 func (a *CAASApplication) IsRemote() bool {
 	return false
+}
+
+// SetStatus sets the status for the application.
+func (a *CAASApplication) SetStatus(statusInfo status.StatusInfo) error {
+	if !status.ValidWorkloadStatus(statusInfo.Status) {
+		return errors.Errorf("cannot set invalid status %q", statusInfo.Status)
+	}
+	return setStatus(a.st, setStatusParams{
+		badge:     "application",
+		globalKey: a.globalKey(),
+		status:    statusInfo.Status,
+		message:   statusInfo.Message,
+		rawData:   statusInfo.Data,
+		updated:   statusInfo.Since,
+	})
 }
