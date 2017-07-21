@@ -27,7 +27,7 @@ Asks the container runtime to kill a container with the specified
 name.
 `
 	return &cmd.Info{
-		Name:    "run-container",
+		Name:    "kill-container",
 		Args:    "<name>",
 		Purpose: "tell container framework to kill one container",
 		Doc:     doc,
